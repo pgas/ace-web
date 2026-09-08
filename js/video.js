@@ -77,24 +77,57 @@ export class AceVideo {
             return { col, row };
         };
 
+        let mouseDownPos = null;
+        let startCell = null;
+        let isDragging = false;
+
         this.canvas.addEventListener('mousedown', (e) => {
             if (e.button === 0) {
-                this.selecting = true;
-                this.selStart = getCell(e);
-                this.selEnd = this.selStart;
-                this.vramOld.fill(-1);
+                mouseDownPos = { x: e.clientX, y: e.clientY };
+                startCell = getCell(e);
+                isDragging = false;
             }
         });
 
         window.addEventListener('mousemove', (e) => {
-            if (this.selecting) {
+            if (!mouseDownPos) return;
+            if ((e.buttons & 1) === 0) {
+                mouseDownPos = null;
+                isDragging = false;
+                return;
+            }
+
+            const dx = e.clientX - mouseDownPos.x;
+            const dy = e.clientY - mouseDownPos.y;
+            if (!isDragging && Math.hypot(dx, dy) >= 4) {
+                isDragging = true;
+                this.selecting = true;
+                this.selStart = startCell;
+            }
+
+            if (isDragging) {
                 this.selEnd = getCell(e);
                 this.vramOld.fill(-1);
             }
         });
 
-        window.addEventListener('mouseup', () => {
-            if (this.selecting) {
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 0 && mouseDownPos) {
+                if (!isDragging) {
+                    // Clicking without dragging removes selection
+                    this.clearSelection();
+                } else {
+                    this.selEnd = getCell(e);
+                    if (this.selStart && this.selEnd &&
+                        this.selStart.col === this.selEnd.col &&
+                        this.selStart.row === this.selEnd.row) {
+                        this.clearSelection();
+                    } else {
+                        this.vramOld.fill(-1);
+                    }
+                }
+                mouseDownPos = null;
+                isDragging = false;
                 this.selecting = false;
             }
         });

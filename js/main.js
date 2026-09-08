@@ -100,6 +100,10 @@ export class JupiterAceEmulator {
         }
     }
 
+    getForthStack() {
+        return this.debugger.getForthStack();
+    }
+
     stepInstruction() {
         const cycles = this.cpu.run_instruction();
         this.currentFrameCycles += cycles;

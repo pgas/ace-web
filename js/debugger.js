@@ -52,6 +52,53 @@ export class AceDebugger {
         };
     }
 
+    /**
+     * Reads the live Jupiter ACE Forth Data Stack directly from RAM
+     * Data stack begins at STKBOT + 12 (15415 + 12), with top pointer at 15419 (0x3C3B)
+     */
+    getForthStack() {
+        const mem = this.emu.memory;
+        const read16 = (a) => mem.readByte(a) | (mem.readByte(a + 1) << 8);
+
+        const stkbot = read16(15415); // STKBOT at 0x3C37
+        const topPtr = read16(15419); // Data stack top pointer at 0x3C3B
+        const stackBase = stkbot + 12; // Data stack items begin 12 bytes above STKBOT
+
+        if (topPtr <= stackBase || topPtr > stackBase + 512) {
+            return {
+                items: [],
+                depth: 0,
+                tosPtr: topPtr,
+                stkbot: stkbot
+            };
+        }
+
+        const items = [];
+        for (let addr = stackBase; addr < topPtr; addr += 2) {
+            const uval = read16(addr);
+            const sval = uval > 32767 ? uval - 65536 : uval;
+            const hex = '0x' + uval.toString(16).padStart(4, '0').toUpperCase();
+            let charRep = null;
+            if (uval >= 32 && uval <= 126) {
+                charRep = String.fromCharCode(uval);
+            }
+            items.push({
+                addr,
+                uval,
+                sval,
+                hex,
+                charRep
+            });
+        }
+
+        return {
+            items,
+            depth: items.length,
+            tosPtr: topPtr,
+            stkbot: stkbot
+        };
+    }
+
     getRegisters() {
         if (!this.emu.cpu || !this.emu.cpu.getState) return null;
         const s = this.emu.cpu.getState();

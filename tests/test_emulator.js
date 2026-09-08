@@ -157,5 +157,39 @@ if (foundTape) {
     console.log("[INFO] Tape file not present; skipped tape execution test");
 }
 
+// Test 6: Forth Data Stack Live Inspection
+emu.reset();
+for (let f = 0; f < 80; f++) emu.runFrame();
+let initialStack = emu.getForthStack();
+if (initialStack.depth === 0) {
+    console.log("[PASS] Forth Stack: starts empty on boot");
+} else {
+    console.error("[FAIL] Forth Stack expected 0 items, got " + initialStack.depth);
+}
+
+// Push 10 20 30 onto stack
+emu.spooler.spoolText("10 20 30\n", false);
+while (emu.spooler.isActive()) emu.runFrame();
+for (let f = 0; f < 30; f++) emu.runFrame();
+
+let stackAfterPush = emu.getForthStack();
+if (stackAfterPush.depth === 3 && stackAfterPush.items[2].sval === 30) {
+    console.log("[PASS] Forth Stack: pushed 10 20 30, TOS=30, depth=3");
+} else {
+    console.error("[FAIL] Forth Stack push mismatch: depth=" + stackAfterPush.depth);
+}
+
+// Pop with +
+emu.spooler.spoolText("+\n", false);
+while (emu.spooler.isActive()) emu.runFrame();
+for (let f = 0; f < 30; f++) emu.runFrame();
+
+let stackAfterAdd = emu.getForthStack();
+if (stackAfterAdd.depth === 2 && stackAfterAdd.items[1].sval === 50) {
+    console.log("[PASS] Forth Stack: executed +, TOS=50 (20+30), depth=2");
+} else {
+    console.error("[FAIL] Forth Stack operation mismatch: depth=" + stackAfterAdd.depth);
+}
+
 console.log("=== All Tests Completed Successfully ===");
 

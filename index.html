@@ -16,16 +16,12 @@
                 <h1>Jupiter ACE Web</h1>
                 <p>Pure Browser-Based Jupiter ACE Forth Microcomputer</p>
             </div>
-        </div>
-        <div class="header-actions">
-            <button id="btn-toggle-debugger" class="btn" title="Toggle Z80 & Forth Debugger HUD">
-                🐞 Debugger HUD
-            </button>
-        </div>
     </header>
 
     <!-- Main Container -->
     <main class="main-container">
+        <div class="emulator-layout">
+            <div class="emulator-main">
 
         <!-- Jupiter ACE Hardware Case -->
         <div class="ace-case">
@@ -133,73 +129,59 @@
             </div>
 
         </section>
+            </div><!-- /.emulator-main -->
 
+            <!-- Forth Stack Visualizer Sidebar -->
+            <aside class="stack-panel">
+                <div class="stack-header">
+                    <div class="stack-title">
+                        <span>🥞</span>
+                        <span>FORTH DATA STACK</span>
+                    </div>
+                    <span id="stack-depth-badge" class="stack-depth-badge empty">Empty</span>
+                </div>
+
+                <!-- Live Stack Items (TOS at top) -->
+                <div id="stack-items-container" class="stack-items-container">
+                    <div class="stack-empty-state">
+                        <div class="stack-empty-icon">🥞</div>
+                        <div class="stack-empty-title">Stack is Empty</div>
+                        <div class="stack-empty-desc">Enter numbers in Forth (e.g. <code>10 20 +</code>) to push onto the stack.</div>
+                    </div>
+                </div>
+
+                <!-- Quick Forth Stack Action Words -->
+                <div class="stack-actions">
+                    <div class="stack-actions-label">QUICK STACK OPS</div>
+                    <div class="stack-btn-row">
+                        <button class="stack-btn" data-word=".">. (pop)</button>
+                        <button class="stack-btn" data-word="DUP">DUP</button>
+                        <button class="stack-btn" data-word="DROP">DROP</button>
+                        <button class="stack-btn" data-word="SWAP">SWAP</button>
+                        <button class="stack-btn" data-word="OVER">OVER</button>
+                        <button class="stack-btn" data-word="ROT">ROT</button>
+                    </div>
+                </div>
+
+                <!-- Stack Footer / System Pointers -->
+                <div class="stack-footer">
+                    <div class="stack-stat">
+                        <span class="stat-name">TOS PTR</span>
+                        <span id="stat-tos-ptr" class="stat-val">0x3C5D</span>
+                    </div>
+                    <div class="stack-stat">
+                        <span class="stat-name">BASE</span>
+                        <span id="stat-base" class="stat-val">10</span>
+                    </div>
+                    <div class="stack-stat">
+                        <span class="stat-name">R-STACK (SP)</span>
+                        <span id="stat-sp" class="stat-val">0x7FFC</span>
+                    </div>
+                </div>
+            </aside>
+
+        </div><!-- /.emulator-layout -->
     </main>
-
-    <!-- In-Browser Debugger HUD Drawer -->
-    <aside id="debugger-hud" class="debugger-hud">
-        <div class="debugger-header">
-            <span style="font-weight: 700; color: var(--accent-cyan);">Z80 & FORTH DEBUGGER</span>
-            <button id="btn-close-debugger" class="btn btn-sm">✕</button>
-        </div>
-        <div class="debugger-body">
-
-            <!-- Execution Step Controls -->
-            <div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">STEPPING</div>
-                <div style="display: flex; gap: 8px;">
-                    <button id="dbg-step-inst" class="btn btn-sm">Step 1 Opcode</button>
-                    <button id="dbg-step-frame" class="btn btn-sm">Step 1 Frame (50Hz)</button>
-                </div>
-            </div>
-
-            <!-- Z80 Registers -->
-            <div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">CPU REGISTERS</div>
-                <div class="reg-grid">
-                    <div class="reg-cell"><span class="reg-name">PC</span><span id="reg-pc" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">SP</span><span id="reg-sp" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">AF</span><span id="reg-af" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">BC</span><span id="reg-bc" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">DE</span><span id="reg-de" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">HL</span><span id="reg-hl" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">IX</span><span id="reg-ix" class="reg-val">0000</span></div>
-                    <div class="reg-cell"><span class="reg-name">IY</span><span id="reg-iy" class="reg-val">0000</span></div>
-                </div>
-                <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                    Flags: <span id="reg-flags" style="color: #fff; font-weight: bold;">--------</span>
-                </div>
-            </div>
-
-            <!-- Forth System Variables -->
-            <div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">FORTH SYSTEM VARIABLES</div>
-                <table class="sysvar-table">
-                    <tr><td>BASE (15423)</td><td id="sys-base">10</td></tr>
-                    <tr><td>FRAMES (15403)</td><td id="sys-frames">0</td></tr>
-                    <tr><td>STKBOT (15415)</td><td id="sys-stkbot">0x3C40</td></tr>
-                    <tr><td>DICT (15417)</td><td id="sys-dict">0x3C40</td></tr>
-                    <tr><td>ERR_NO (15421)</td><td id="sys-err">255 (OK)</td></tr>
-                </table>
-            </div>
-
-            <!-- Memory Hex Viewer -->
-            <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                    <span style="font-size: 11px; color: var(--text-muted);">HEX MEMORY DUMP</span>
-                    <input type="text" id="hex-address-input" value="0x3C00" style="width: 80px; font-size: 11px; text-align: center;">
-                </div>
-                <div id="hex-dump-content" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 10px; line-height: 1.4; max-height: 140px; overflow-y: auto;"></div>
-            </div>
-
-            <!-- Forth Dictionary Tree -->
-            <div>
-                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">DICTIONARY LINKAGE</div>
-                <div id="dict-words-list" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 11px; max-height: 120px; overflow-y: auto;"></div>
-            </div>
-
-        </div>
-    </aside>
 
     <!-- Forth Spooler / Paste Modal -->
     <div id="spool-modal" class="modal-backdrop">
@@ -477,71 +459,78 @@
             btn.addEventListener('click', () => btn.blur());
         });
 
-        // Debugger HUD Wiring
-        const debuggerHud = document.getElementById('debugger-hud');
-        document.getElementById('btn-toggle-debugger').addEventListener('click', () => {
-            debuggerHud.classList.toggle('open');
-        });
-        document.getElementById('btn-close-debugger').addEventListener('click', () => {
-            debuggerHud.classList.remove('open');
-        });
+        // Forth Data Stack Visualizer
+        const stackItemsContainer = document.getElementById('stack-items-container');
+        const stackDepthBadge = document.getElementById('stack-depth-badge');
+        const statTosPtr = document.getElementById('stat-tos-ptr');
+        const statBase = document.getElementById('stat-base');
+        const statSp = document.getElementById('stat-sp');
 
-        document.getElementById('dbg-step-inst').addEventListener('click', () => {
-            emu.pause();
-            emu.stepInstruction();
-            updateDebuggerHud();
-        });
-
-        document.getElementById('dbg-step-frame').addEventListener('click', () => {
-            emu.pause();
-            emu.runFrame();
-            updateDebuggerHud();
-        });
-
-        const hexAddrInput = document.getElementById('hex-address-input');
-        hexAddrInput.addEventListener('change', () => updateDebuggerHud());
-
-        function updateDebuggerHud() {
-            if (!debuggerHud.classList.contains('open')) return;
-
-            const regs = emu.debugger.getRegisters();
-            if (regs) {
-                document.getElementById('reg-pc').textContent = regs.PC;
-                document.getElementById('reg-sp').textContent = regs.SP;
-                document.getElementById('reg-af').textContent = regs.AF;
-                document.getElementById('reg-bc').textContent = regs.BC;
-                document.getElementById('reg-de').textContent = regs.DE;
-                document.getElementById('reg-hl').textContent = regs.HL;
-                document.getElementById('reg-ix').textContent = regs.IX;
-                document.getElementById('reg-iy').textContent = regs.IY;
-                document.getElementById('reg-flags').textContent = regs.Flags;
-            }
-
+        function updateStackVisualizer() {
+            if (!emu || !emu.debugger) return;
+            const stackData = emu.getForthStack();
             const sys = emu.debugger.getSysVars();
-            document.getElementById('sys-base').textContent = sys.BASE;
-            document.getElementById('sys-frames').textContent = sys.FRAMES;
-            document.getElementById('sys-stkbot').textContent = '0x' + sys.STKBOT.toString(16).toUpperCase();
-            document.getElementById('sys-dict').textContent = '0x' + sys.DICT.toString(16).toUpperCase();
-            document.getElementById('sys-err').textContent = `${sys.ERR_NO} (${sys.ERR_DESC})`;
+            const regs = emu.debugger.getRegisters();
 
-            // Hex dump
-            let addr = parseInt(hexAddrInput.value, 16);
-            if (isNaN(addr)) addr = 0x3C00;
-            const dump = emu.debugger.getMemoryDump(addr, 64);
-            const dumpHtml = dump.map(r => `<div><span style="color: var(--accent-cyan);">${r.addr}:</span> ${r.bytes} <span style="color: var(--text-muted);">|${r.ascii}|</span></div>`).join('');
-            document.getElementById('hex-dump-content').innerHTML = dumpHtml;
+            if (statTosPtr) statTosPtr.textContent = '0x' + (stackData.tosPtr || 0).toString(16).toUpperCase();
+            if (statBase) statBase.textContent = sys.BASE;
+            if (statSp && regs) statSp.textContent = '0x' + regs.SP;
 
-            // Dictionary list
-            const words = emu.debugger.inspectDictionary(15);
-            if (words.length > 0) {
-                document.getElementById('dict-words-list').innerHTML = words.map(w => `<div><span style="color: var(--accent-amber); font-weight: bold;">${w.name}</span> <span style="color: var(--text-muted); font-size: 10px;">(${w.addr})</span></div>`).join('');
-            } else {
-                document.getElementById('dict-words-list').textContent = 'No user words defined yet.';
+            if (stackData.depth === 0) {
+                stackDepthBadge.textContent = 'Empty';
+                stackDepthBadge.className = 'stack-depth-badge empty';
+                stackItemsContainer.innerHTML = `
+                    <div class="stack-empty-state">
+                        <div class="stack-empty-icon">🥞</div>
+                        <div class="stack-empty-title">Stack is Empty</div>
+                        <div class="stack-empty-desc">Enter numbers in Forth (e.g. <code>10 20 +</code>) to push onto the stack.</div>
+                    </div>
+                `;
+                return;
             }
+
+            stackDepthBadge.textContent = `${stackData.depth} item${stackData.depth > 1 ? 's' : ''}`;
+            stackDepthBadge.className = 'stack-depth-badge has-items';
+
+            // Display items with TOS at the top (top-down view)
+            const items = stackData.items.slice().reverse();
+            let html = '';
+            items.forEach((item, idx) => {
+                const isTos = idx === 0;
+                const posLabel = isTos ? 'TOS' : `S${idx}`;
+                const charTag = item.charRep ? `<span class="stack-char-tag" title="ASCII character">‘${item.charRep}’</span>` : '';
+                const unsignedSub = (item.sval < 0) ? `<span class="stack-unsigned-sub">(${item.uval}u)</span>` : '';
+
+                html += `
+                    <div class="stack-card ${isTos ? 'is-tos' : ''}">
+                        <div class="stack-card-header">
+                            <span class="stack-pos-badge ${isTos ? 'tos-badge' : ''}">${posLabel}</span>
+                            <span class="stack-hex">${item.hex}</span>
+                        </div>
+                        <div class="stack-card-body">
+                            <span class="stack-val-num">${item.sval}</span>
+                            ${charTag}
+                            ${unsignedSub}
+                        </div>
+                    </div>
+                `;
+            });
+            stackItemsContainer.innerHTML = html;
         }
 
-        // Periodic debugger HUD refresh (every 250ms if open)
-        setInterval(updateDebuggerHud, 250);
+        // Quick Forth stack operation buttons
+        document.querySelectorAll('.stack-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const word = btn.getAttribute('data-word');
+                if (word) {
+                    emu.spooler.spoolText(word + '\n', false);
+                    btn.blur();
+                }
+            });
+        });
+
+        // Live stack visualizer loop (updates at 10Hz)
+        setInterval(updateStackVisualizer, 100);
     </script>
 </body>
 </html>
