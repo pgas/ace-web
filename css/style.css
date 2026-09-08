@@ -244,6 +244,11 @@ header {
     box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
 }
 
+#ace-canvas:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.5), 0 0 16px rgba(0, 0, 0, 0.8);
+}
+
 @media (min-width: 860px) {
     #ace-canvas {
         width: 640px;

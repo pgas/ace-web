@@ -45,7 +45,7 @@
 
             <!-- CRT Screen Housing -->
             <div class="screen-housing">
-                <canvas id="ace-canvas" width="512" height="384"></canvas>
+                <canvas id="ace-canvas" width="512" height="384" tabindex="0"></canvas>
             </div>
 
             <!-- Hardware Status Strip -->
@@ -96,6 +96,13 @@
                             <option value="3">3 KB (Base Unexpanded)</option>
                             <option value="19" selected>19 KB (3KB + 16KB Expansion)</option>
                             <option value="48">48 KB (Full Expansion)</option>
+                        </select>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Arrow Keys Mode</span>
+                        <select id="select-arrow-mode">
+                            <option value="qaop" selected>Q / A / O / P (Games: Tut-Tut)</option>
+                            <option value="native">Native Ace (Shift + 5, 6, 7, 8)</option>
                         </select>
                     </div>
                 </div>
@@ -336,6 +343,13 @@
             URL.revokeObjectURL(url);
         });
 
+        // Arrow Keys mode (QAOP for games vs Native Ace)
+        const selectArrowMode = document.getElementById('select-arrow-mode');
+        selectArrowMode.addEventListener('change', (e) => {
+            emu.keyboard.setArrowMode(e.target.value);
+            selectArrowMode.blur();
+        });
+
         btnLoadTuttut.addEventListener('click', async () => {
             try {
                 // Ensure extended 19KB RAM is enabled (Tut-Tut requires > 3KB)
@@ -343,17 +357,29 @@
                 selectRam.value = '19';
                 ramStatusText.textContent = 'RAM: 19 KB (Extended)';
 
-                // Fetch and attach tut-tut.tap
-                const res = await fetch('examples/tut-tut.tap');
-                const buf = await res.arrayBuffer();
-                emu.tape.attach('tut-tut.tap', buf);
-                emu.tape.rewind();
+                // Fetch and attach tut-tut.tap if available
+                let buf = null;
+                try {
+                    const res = await fetch('examples/tut-tut.tap');
+                    if (res && res.ok) {
+                        buf = await res.arrayBuffer();
+                    }
+                } catch (e) {
+                    buf = null;
+                }
 
-                // Spool the load command and launch Tut-Tut automatically
-                emu.spooler.spoolText('LOAD TUTTUT\nTUTTUT\n', false);
-                btnRunTuttut.style.display = 'inline-flex';
+                if (buf) {
+                    emu.tape.attach('tut-tut.tap', buf);
+                    emu.tape.rewind();
+                    emu.spooler.spoolText('LOAD TUTTUT\nTUTTUT\n', false);
+                    btnRunTuttut.style.display = 'inline-flex';
+                } else {
+                    alert('Bundled examples directory is removed. Please attach a .tap file using the file picker.');
+                    tapeFileInput.click();
+                }
             } catch (err) {
-                alert('Could not fetch tut-tut.tap: ' + err.message);
+                alert('Could not attach tape: ' + err.message);
+                tapeFileInput.click();
             }
         });
 

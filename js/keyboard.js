@@ -2,46 +2,45 @@
  * Jupiter ACE Keyboard Subsystem
  * 
  * Matrix consists of 8 half-rows read via port 0xFE:
- * Port 0 (0xFEFE): Shift, Symbol Shift, Z, X, C
- * Port 1 (0xFDFE): A, S, D, F, G
- * Port 2 (0xFBFE): Q, W, E, R, T
- * Port 3 (0xF7FE): 1, 2, 3, 4, 5
- * Port 4 (0xEFFE): 0, 9, 8, 7, 6
- * Port 5 (0xDFFE): P, O, I, U, Y
- * Port 6 (0xBFFE): Enter, L, K, J, H
- * Port 7 (0x7FFE): Space, Symbol Shift, M, N, B
+ * Port 0 (0xFEFE): Caps Shift (bit 0), Symbol Shift (bit 1), Z (bit 2), X (bit 3), C (bit 4)
+ * Port 1 (0xFDFE): A (bit 0), S (bit 1), D (bit 2), F (bit 3), G (bit 4)
+ * Port 2 (0xFBFE): Q (bit 0), W (bit 1), E (bit 2), R (bit 3), T (bit 4)
+ * Port 3 (0xF7FE): 1 (bit 0), 2 (bit 1), 3 (bit 2), 4 (bit 3), 5 (bit 4)
+ * Port 4 (0xEFFE): 0 (bit 0), 9 (bit 1), 8 (bit 2), 7 (bit 3), 6 (bit 4)
+ * Port 5 (0xDFFE): P (bit 0), O (bit 1), I (bit 2), U (bit 3), Y (bit 4)
+ * Port 6 (0xBFFE): Enter (bit 0), L (bit 1), K (bit 2), J (bit 3), H (bit 4)
+ * Port 7 (0x7FFE): Space (bit 0), Symbol Shift (bit 1), M (bit 2), N (bit 3), B (bit 4)
  */
 
 export class AceKeyboard {
     constructor() {
         this.ports = new Uint8Array(8);
-        this.activeKeyTimers = new Map();
+        this.heldKeys = new Set();      // Physical keys currently held down (by code or key)
+        this.virtualKeys = new Set();   // Programmatic / Spooler / MCP keys
+        this.arrowMode = 'qaop';        // 'qaop' (standard Sinclair/Ace gaming: Q=Up, A=Down, O=Left, P=Right) | 'native' (Shift+5,6,7,8)
+        
         this.clear();
-        this.jupiterLayout = false;
-        this.graphicsMode = false;
-
         this.keyPressMap = this.buildKeyMap();
         this.setupDomListeners();
     }
 
     clear() {
         this.ports.fill(0xff);
-        if (this.activeKeyTimers) {
-            this.activeKeyTimers.clear();
+        this.heldKeys.clear();
+        this.virtualKeys.clear();
+    }
+
+    setArrowMode(mode) {
+        if (mode === 'qaop' || mode === 'native') {
+            this.arrowMode = mode;
+            this.updateMatrix();
         }
     }
 
     tick() {
-        if (!this.activeKeyTimers || this.activeKeyTimers.size === 0) return;
-        for (const [key, item] of this.activeKeyTimers) {
-            item.frames--;
-            if (item.frames <= 0) {
-                for (const [p, m] of item.mapping) {
-                    this.releaseKey(p, m);
-                }
-                this.activeKeyTimers.delete(key);
-            }
-        }
+        // Maintained for frame loop hook.
+        // Matrix is aggregate and driven by keydown/keyup events so held keys
+        // remain continuously active without artificial frame timeouts.
     }
 
     readPort(portIndex) {
@@ -81,15 +80,117 @@ export class AceKeyboard {
         }
     }
 
+    updateMatrix() {
+        this.ports.fill(0xff);
+
+        // 1. Apply programmatically pressed keys (Spooler, MCP, buttons)
+        for (const vk of this.virtualKeys) {
+            const mapping = this.getCharMapping(vk);
+            if (mapping) {
+                for (const [p, m] of mapping) {
+                    this.ports[p] &= m;
+                }
+            }
+        }
+
+        // 2. Apply physically held keys
+        for (const keyId of this.heldKeys) {
+            const mapping = this.resolveKeyId(keyId);
+            if (mapping) {
+                for (const [p, m] of mapping) {
+                    this.ports[p] &= m;
+                }
+            }
+        }
+    }
+
+    resolveKeyId(keyId) {
+        // Check special arrow mapping first
+        if (keyId === 'ArrowLeft') {
+            return this.arrowMode === 'qaop'
+                ? [[5, 0xfd]]                     // 'o' (Left in Tut-Tut & games)
+                : [[0, 0xfe], [3, 0xef]];         // Shift + 5 (Ace cursor left)
+        }
+        if (keyId === 'ArrowRight') {
+            return this.arrowMode === 'qaop'
+                ? [[5, 0xfe]]                     // 'p' (Right in Tut-Tut & games)
+                : [[0, 0xfe], [4, 0xfb]];         // Shift + 8 (Ace cursor right)
+        }
+        if (keyId === 'ArrowUp') {
+            return this.arrowMode === 'qaop'
+                ? [[2, 0xfe]]                     // 'q' (Up in Tut-Tut & games)
+                : [[0, 0xfe], [4, 0xf7]];         // Shift + 7 (Ace cursor up)
+        }
+        if (keyId === 'ArrowDown') {
+            return this.arrowMode === 'qaop'
+                ? [[1, 0xfe]]                     // 'a' (Down in Tut-Tut & games)
+                : [[0, 0xfe], [4, 0xef]];         // Shift + 6 (Ace cursor down)
+        }
+
+        // Code mappings: KeyA..KeyZ, Digit0..Digit9
+        if (keyId.startsWith('Key') && keyId.length === 4) {
+            const letter = keyId[3].toLowerCase();
+            return this.keyPressMap[letter] || null;
+        }
+        if (keyId.startsWith('Digit') && keyId.length === 6) {
+            const digit = keyId[5];
+            return this.keyPressMap[digit] || null;
+        }
+
+        // General map lookup (Enter, Space, Backspace, Escape, Shift, punctuation, etc.)
+        if (this.keyPressMap[keyId]) {
+            return this.keyPressMap[keyId];
+        }
+        const lower = keyId.toLowerCase();
+        if (this.keyPressMap[lower]) {
+            return this.keyPressMap[lower];
+        }
+
+        return null;
+    }
+
+    getCharMapping(ch) {
+        if (!ch) return null;
+        if (ch === '\n' || ch === 'Enter') return [[6, 0xfe]];
+        if (ch === ' ') return [[7, 0xfe]];
+        if (ch === 'Shift') return [[0, 0xfe]];
+
+        // Uppercase letters -> Shift + lowercase letter
+        if (ch.length === 1 && ch >= 'A' && ch <= 'Z') {
+            const lowerMap = this.keyPressMap[ch.toLowerCase()];
+            if (lowerMap) {
+                return [[0, 0xfe], ...lowerMap];
+            }
+        }
+
+        if (this.keyPressMap[ch]) {
+            return this.keyPressMap[ch];
+        }
+        const lower = ch.toLowerCase();
+        if (this.keyPressMap[lower]) {
+            return this.keyPressMap[lower];
+        }
+        return null;
+    }
+
+    pressCharacter(ch) {
+        this.virtualKeys.add(ch);
+        this.updateMatrix();
+    }
+
+    releaseCharacter(ch) {
+        this.virtualKeys.delete(ch);
+        this.updateMatrix();
+    }
+
     buildKeyMap() {
         // Map keyboard Key / Code -> [ [port1, mask1], [port2, mask2] ]
-        // Port 0, 0xfd is Symbol Shift; Port 0, 0xfe is Caps Shift
         const SYM = [0, 0xfd];
         const SHIFT = [0, 0xfe];
 
         return {
-            // Letters
-            'a': [[1, 0xfe]], 'b': [[7, 0xf7]], 'c': [[0, 0xef]], 'd': [[1, 0xfb]],
+            // Letters (Port 0: Z X C, Port 1: A S D F G, Port 2: Q W E R T, Port 5: P O I U Y, Port 6: L K J H, Port 7: M N B)
+            'a': [[1, 0xfe]], 'b': [[7, 0xef]], 'c': [[0, 0xef]], 'd': [[1, 0xfb]],
             'e': [[2, 0xfb]], 'f': [[1, 0xf7]], 'g': [[1, 0xef]], 'h': [[6, 0xef]],
             'i': [[5, 0xfb]], 'j': [[6, 0xf7]], 'k': [[6, 0xfb]], 'l': [[6, 0xfd]],
             'm': [[7, 0xfd]], 'n': [[7, 0xfb]], 'o': [[5, 0xfd]], 'p': [[5, 0xfe]],
@@ -97,20 +198,24 @@ export class AceKeyboard {
             'u': [[5, 0xf7]], 'v': [[7, 0xef]], 'w': [[2, 0xfd]], 'x': [[0, 0xf7]],
             'y': [[5, 0xef]], 'z': [[0, 0xfb]],
 
-            // Digits
+            // Digits (Port 3: 1 2 3 4 5, Port 4: 0 9 8 7 6)
             '0': [[4, 0xfe]], '1': [[3, 0xfe]], '2': [[3, 0xfd]], '3': [[3, 0xfb]],
             '4': [[3, 0xf7]], '5': [[3, 0xef]], '6': [[4, 0xef]], '7': [[4, 0xf7]],
             '8': [[4, 0xfb]], '9': [[4, 0xfd]],
 
             // Control
             'Enter': [[6, 0xfe]],
+            'NumpadEnter': [[6, 0xfe]],
             ' ': [[7, 0xfe]],
+            'Space': [[7, 0xfe]],
             'Backspace': [SHIFT, [4, 0xfe]], // Shift + 0 = Delete / Backspace
             'Delete': [SHIFT, [4, 0xfe]],
             'Escape': [SHIFT, [7, 0xfe]],    // Shift + Space = BREAK
             'Shift': [SHIFT],
+            'ShiftLeft': [SHIFT],
+            'ShiftRight': [SHIFT],
 
-            // Shifted Symbols & Punctuation
+            // Shifted Symbols & Punctuation (Jupiter Ace native Symbol Shift combinations)
             ':': [SYM, [0, 0xfb]], // Sym + Z
             ';': [SYM, [5, 0xfd]], // Sym + O
             '"': [SYM, [5, 0xfe]], // Sym + P
@@ -137,12 +242,6 @@ export class AceKeyboard {
             '[': [SYM, [5, 0xef]], // Sym + Y
             ']': [SYM, [5, 0xf7]], // Sym + U
 
-            // Cursor arrows (Shift + 5, 6, 7, 8)
-            'ArrowLeft': [SHIFT, [3, 0xef]],
-            'ArrowDown': [SHIFT, [4, 0xf7]],
-            'ArrowUp': [SHIFT, [4, 0xef]],
-            'ArrowRight': [SHIFT, [4, 0xfb]],
-
             // Function keys
             'F1': [SHIFT, [3, 0xfe]], // Delete line (Shift+1)
             'F4': [SHIFT, [3, 0xf7]], // Inverse video (Shift+4)
@@ -154,42 +253,25 @@ export class AceKeyboard {
         if (typeof window === 'undefined') return;
 
         window.addEventListener('keydown', (e) => {
-            // Ignore keystrokes when typing in textareas or inputs
+            // Ignore keystrokes when typing inside inputs or textareas
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
                 return;
             }
 
-            let key = e.key;
-
-            // Handle Shift key separately (hold until keyup)
-            if (key === 'Shift') {
-                this.pressKey(0, 0xfe);
+            // Prevent default page scrolling / browser behavior on game keys
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) {
                 e.preventDefault();
-                return;
             }
 
-            // Shifted uppercase letter
-            if (key.length === 1 && key >= 'A' && key <= 'Z') {
-                const lower = key.toLowerCase();
-                const letterMap = this.keyPressMap[lower] || [];
-                const fullMap = [[0, 0xfe], ...letterMap];
-                for (const [p, m] of fullMap) {
-                    this.pressKey(p, m);
-                }
-                // Auto-release after 3 Ace frames (~60ms normal, ~15ms in 4x Turbo)
-                // This prevents runaway ROM key-repeat in Turbo mode while guaranteeing 50Hz interrupt sampling
-                this.activeKeyTimers.set(key, { mapping: fullMap, frames: 3 });
-                e.preventDefault();
-                return;
-            }
+            // Record primary key identifier
+            // Use e.key for punctuation/symbols, e.code for physical letters/arrows/digits
+            const id = (e.key && e.key.length === 1 && !e.code.startsWith('Key') && !e.code.startsWith('Digit'))
+                ? e.key
+                : (e.code || e.key);
 
-            const mapping = this.keyPressMap[key] || this.keyPressMap[key.toLowerCase()];
-            if (mapping) {
-                for (const [p, m] of mapping) {
-                    this.pressKey(p, m);
-                }
-                this.activeKeyTimers.set(key, { mapping, frames: 3 });
-                e.preventDefault();
+            if (!this.heldKeys.has(id)) {
+                this.heldKeys.add(id);
+                this.updateMatrix();
             }
         });
 
@@ -198,71 +280,18 @@ export class AceKeyboard {
                 return;
             }
 
-            let key = e.key;
-            if (key === 'Shift') {
-                this.releaseKey(0, 0xfe);
-                e.preventDefault();
-                return;
-            }
+            const id1 = e.code || e.key;
+            const id2 = e.key;
 
-            if (this.activeKeyTimers.has(key)) {
-                const item = this.activeKeyTimers.get(key);
-                for (const [p, m] of item.mapping) {
-                    this.releaseKey(p, m);
-                }
-                this.activeKeyTimers.delete(key);
-            }
-
-            if (key.length === 1 && key >= 'A' && key <= 'Z') {
-                this.releaseCharacter(key);
-                e.preventDefault();
-                return;
-            }
-
-            const mapping = this.keyPressMap[key] || this.keyPressMap[key.toLowerCase()];
-            if (mapping) {
-                for (const [p, m] of mapping) {
-                    this.releaseKey(p, m);
-                }
-                e.preventDefault();
-            }
+            this.heldKeys.delete(id1);
+            if (id2) this.heldKeys.delete(id2);
+            this.updateMatrix();
         });
-    }
 
-    pressCharacter(ch) {
-        const isUpper = ch >= 'A' && ch <= 'Z';
-        const lower = ch.toLowerCase();
-
-        if (isUpper) {
-            // Press Shift + lower letter
-            this.pressKey(0, 0xfe); // Caps shift
-        }
-        if (this.keyPressMap[lower]) {
-            for (const [p, m] of this.keyPressMap[lower]) {
-                this.pressKey(p, m);
-            }
-        } else if (this.keyPressMap[ch]) {
-            for (const [p, m] of this.keyPressMap[ch]) {
-                this.pressKey(p, m);
-            }
-        }
-    }
-
-    releaseCharacter(ch) {
-        const isUpper = ch >= 'A' && ch <= 'Z';
-        const lower = ch.toLowerCase();
-
-        if (isUpper) {
-            this.releaseKey(0, 0xfe);
-        }
-        if (this.keyPressMap[lower]) {
-            for (const [p, m] of this.keyPressMap[lower]) {
-                this.releaseKey(p, m);
-            }
-        } else if (this.keyPressMap[ch]) {
-            for (const [p, m] of this.keyPressMap[ch]) {
-                this.releaseKey(p, m);
-            }
-        }
+        // Window lost focus -> clear all held keys so no keys get stuck
+        window.addEventListener('blur', () => {
+            this.heldKeys.clear();
+            this.updateMatrix();
+        });
     }
 }

@@ -26,14 +26,16 @@ Zero build step, zero dependencies, runs directly in any modern web browser.
   - High-level ROM trap emulation (`0xED 0xFC` fast load, `0xED 0xFD` fast save).
   - Drag-and-drop support for `.tap` files.
   - Case- and punctuation-insensitive matching.
-  - Bundled with the classic game **Tut-Tut** (`examples/tut-tut.tap`).
+  - User tape attachment and tape export/download.
 - **Forth Source Spooler**:
   - File uploader (`.fth`, `.txt`, `.forth`, `.ace`) and clipboard paste modal.
   - Automatic comment stripping (`( ... )` outside colon definitions) to prevent Ace ROM `ERROR 4`.
   - Paced keyboard feeding (key down, key up, and compilation delays) with automatic Turbo speedup.
-- **Keyboard & Turbo Debouncing**:
+- **Keyboard & Gaming Engine**:
   - Full Jupiter ACE 8-port keyboard matrix (`0xFEFE`..`0x7FFE`).
-  - Active key frame limiter preventing ROM auto-repeat runaway in 4x Turbo mode.
+  - Aggregate non-blocking matrix architecture: supports continuous key holds for fast gaming.
+  - Switchable Arrow Keys mode: `Q/A/O/P` (Tut-Tut and classic games) or Native Jupiter Ace (`Shift + 5, 6, 7, 8`).
+- **In-Browser Debugger HUD**:key frame limiter preventing ROM auto-repeat runaway in 4x Turbo mode.
 - **Developer & Agent Integration**:
   - **HUD Debugger**: Live register inspector (PC, SP, AF, BC, DE, HL, IX, IY, flags), Forth system variables (`BASE`, `FRAMES`, `STKBOT`, `DICT`, `ERR_NO`), memory hex dump, and dictionary browser.
   - **Model Context Protocol (MCP)**: Bundled Python MCP server (`mcp/mcp_ace_server.py`) and browser automation bridge (`window.__ace`).
@@ -66,13 +68,7 @@ ace-web/
 ├── README.md             # Documentation
 ├── css/
 │   └── style.css         # Authentic Jupiter ACE case styling & layout
-├── images/
-│   └── ace_logo.png      # Authentic Jupiter ACE logo
-├── examples/             # Bundled demo files
-│   ├── tut-tut.tap       # Complete Tut-Tut game tape
-│   ├── forth.txt         # Standard Forth utilities
-│   ├── dc.fth            # Forth Disassembler
-│   └── tor.fth           # Tower of Hanoi demo
+├── images/               # Authentic Jupiter ACE logo
 ├── js/                   # Core emulator ES6 modules
 │   ├── main.js           # Frame loop coordinator & emulator instance
 │   ├── rom.js            # Embedded 8KB ROM (with Base64 fallback)
