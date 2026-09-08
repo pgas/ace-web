@@ -33,7 +33,20 @@ const dummyCanvas = {
     width: 256, height: 192
 };
 var document = { createElement: () => dummyCanvas };
-var window = { addEventListener: () => {}, AudioContext: null, webkitAudioContext: null };
+var windowListeners = {};
+var window = {
+    addEventListener: (type, fn) => {
+        if (!windowListeners[type]) windowListeners[type] = [];
+        windowListeners[type].push(fn);
+    },
+    dispatchEvent: (ev) => {
+        if (windowListeners[ev.type]) {
+            windowListeners[ev.type].forEach(fn => fn(ev));
+        }
+    },
+    AudioContext: null,
+    webkitAudioContext: null
+};
 
 console.log("=== Jupiter ACE Web Test Suite ===");
 loadModule("js/rom.js");
@@ -113,6 +126,49 @@ if (emu.keyboard.ports[0] === 0xfe && emu.keyboard.ports[4] === 0xef) {
 } else {
     console.error("[FAIL] Keyboard: Native ArrowDown mapping incorrect");
 }
+emu.keyboard.clear();
+
+// Shift+8 (*) via simulated DOM events: should produce Symbol Shift (Port 0: 0xfd) + B (Port 7: 0xf7)
+window.dispatchEvent({ type: 'keydown', code: 'ShiftLeft', key: 'Shift' });
+window.dispatchEvent({ type: 'keydown', code: 'Digit8', key: '*' });
+if (emu.keyboard.ports[0] === 0xfd && emu.keyboard.ports[7] === 0xf7) {
+    console.log("[PASS] Keyboard DOM: Shift+8 produces Symbol Shift (0xfd) + B (0xf7) without Caps Shift pollution");
+} else {
+    console.error("[FAIL] Keyboard DOM: Shift+8 got Port 0=0x" + emu.keyboard.ports[0].toString(16) + " Port 7=0x" + emu.keyboard.ports[7].toString(16));
+}
+
+// Release Shift BEFORE releasing 8: must cleanly unjam without leaving key stuck
+window.dispatchEvent({ type: 'keyup', code: 'ShiftLeft', key: 'Shift' });
+// Advance 3 frames to satisfy interrupt sampling hold
+emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
+window.dispatchEvent({ type: 'keyup', code: 'Digit8', key: '8' });
+if (emu.keyboard.ports[0] === 0xff && emu.keyboard.ports[7] === 0xff && emu.keyboard.activeKeys.size === 0) {
+    console.log("[PASS] Keyboard DOM: Releasing Shift before key clears cleanly without jamming");
+} else {
+    console.error("[FAIL] Keyboard DOM: Keys stuck after Shift-first release, activeKeys size=" + emu.keyboard.activeKeys.size);
+}
+
+// Shift+A: should produce Caps Shift (Port 0: 0xfe) + A (Port 1: 0xfe)
+window.dispatchEvent({ type: 'keydown', code: 'ShiftLeft', key: 'Shift' });
+window.dispatchEvent({ type: 'keydown', code: 'KeyA', key: 'A' });
+if (emu.keyboard.ports[0] === 0xfe && emu.keyboard.ports[1] === 0xfe) {
+    console.log("[PASS] Keyboard DOM: Shift+A produces Caps Shift (0xfe) + A (0xfe)");
+} else {
+    console.error("[FAIL] Keyboard DOM: Shift+A got Port 0=0x" + emu.keyboard.ports[0].toString(16) + " Port 1=0x" + emu.keyboard.ports[1].toString(16));
+}
+emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
+window.dispatchEvent({ type: 'keyup', code: 'KeyA', key: 'a' });
+window.dispatchEvent({ type: 'keyup', code: 'ShiftLeft', key: 'Shift' });
+
+// '=' key: should produce Symbol Shift (Port 0: 0xfd) + L (Port 6: 0xfd)
+window.dispatchEvent({ type: 'keydown', code: 'Equal', key: '=' });
+if (emu.keyboard.ports[0] === 0xfd && emu.keyboard.ports[6] === 0xfd) {
+    console.log("[PASS] Keyboard DOM: '=' key produces Symbol Shift (0xfd) + L (0xfd)");
+} else {
+    console.error("[FAIL] Keyboard DOM: '=' got Port 0=0x" + emu.keyboard.ports[0].toString(16) + " Port 6=0x" + emu.keyboard.ports[6].toString(16));
+}
+emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
+window.dispatchEvent({ type: 'keyup', code: 'Equal', key: '=' });
 emu.keyboard.clear();
 
 // Test 4: Audio Subsystem & Speaker Toggling (BEEP execution)

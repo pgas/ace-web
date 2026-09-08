@@ -15,10 +15,10 @@
 export class AceKeyboard {
     constructor() {
         this.ports = new Uint8Array(8);
-        this.heldKeys = new Set();          // Keys currently asserted in matrix
-        this.physicallyDown = new Set();   // Keys physically held down by user
-        this.keyHoldFrames = new Map();     // Tracks frame duration for each key
+        this.activeKeys = new Map();        // Keyed by e.code: { mapping, usesSymShift, frames, released, active }
+        this.shiftKeys = new Set();         // e.code for active shift keys ('ShiftLeft', 'ShiftRight')
         this.virtualKeys = new Set();       // Programmatic / Spooler / MCP keys
+        this.heldKeys = new Set();          // Compatibility set for headless tests & direct control
 
         this.onCopy = null;                 // Callback for Cmd+C / Ctrl+C
         this.onPaste = null;                // Callback for Cmd+V / Ctrl+V
@@ -30,64 +30,41 @@ export class AceKeyboard {
 
     clear() {
         this.ports.fill(0xff);
-        this.heldKeys.clear();
-        this.physicallyDown.clear();
-        this.keyHoldFrames.clear();
+        this.activeKeys.clear();
+        this.shiftKeys.clear();
         this.virtualKeys.clear();
+        this.heldKeys.clear();
     }
 
     tick() {
         let changed = false;
 
-        // Process physically held keys with calibrated pacing
-        for (const keyId of this.physicallyDown) {
-            // Modifiers (Shift) remain asserted continuously while held
-            if (keyId === 'Shift' || keyId === 'ShiftLeft' || keyId === 'ShiftRight') {
-                if (!this.heldKeys.has(keyId)) {
-                    this.heldKeys.add(keyId);
-                    changed = true;
-                }
+        for (const [code, item] of this.activeKeys) {
+            item.frames++;
+
+            // If key was physically released and completed minimum 3-frame hold for ROM sampling
+            if (item.released && item.frames >= 3) {
+                this.activeKeys.delete(code);
+                changed = true;
                 continue;
             }
 
-            const frames = (this.keyHoldFrames.get(keyId) || 0) + 1;
-            this.keyHoldFrames.set(keyId, frames);
-
             let shouldBeActive = false;
-            if (frames <= 3) {
+            if (item.frames <= 3) {
                 // Initial tap pulse: 3 frames (60ms) to ensure 50Hz interrupt sampling
                 shouldBeActive = true;
-            } else if (frames <= 45) {
-                // Initial repeat delay: 42 frames (~850-900ms pause) - eliminates overly sensitive hair-trigger repeats
+            } else if (item.frames <= 45) {
+                // Initial repeat delay: 42 frames (~850-900ms pause)
                 shouldBeActive = false;
             } else {
                 // Paced repeat: 16-frame cycle (320ms = ~3.1 chars/sec)
-                // 3 frames active (60ms), 13 frames quiet (260ms)
-                const cycle = (frames - 46) % 16;
+                const cycle = (item.frames - 46) % 16;
                 shouldBeActive = cycle < 3;
             }
 
-            if (shouldBeActive && !this.heldKeys.has(keyId)) {
-                this.heldKeys.add(keyId);
+            if (item.active !== shouldBeActive) {
+                item.active = shouldBeActive;
                 changed = true;
-            } else if (!shouldBeActive && this.heldKeys.has(keyId)) {
-                this.heldKeys.delete(keyId);
-                changed = true;
-            }
-        }
-
-        // Clean up keys that were physically released after reaching minimum 3 frames
-        for (const [keyId, frames] of this.keyHoldFrames) {
-            if (!this.physicallyDown.has(keyId)) {
-                const nextFrames = frames + 1;
-                this.keyHoldFrames.set(keyId, nextFrames);
-                if (nextFrames >= 3) {
-                    this.keyHoldFrames.delete(keyId);
-                    if (this.heldKeys.has(keyId)) {
-                        this.heldKeys.delete(keyId);
-                        changed = true;
-                    }
-                }
             }
         }
 
@@ -146,7 +123,41 @@ export class AceKeyboard {
             }
         }
 
-        // 2. Apply active user keys
+        // 2. Check if any active user key uses Symbol Shift
+        let hasSymShift = false;
+        for (const item of this.activeKeys.values()) {
+            if (item.active && item.usesSymShift) {
+                hasSymShift = true;
+                break;
+            }
+        }
+
+        if (!hasSymShift) {
+            for (const keyId of this.heldKeys) {
+                const mapping = this.resolveKeyId(keyId);
+                if (mapping && mapping.some(m => m[0] === 0 && m[1] === 0xfd)) {
+                    hasSymShift = true;
+                    break;
+                }
+            }
+        }
+
+        // 3. Physical Shift (Caps Shift = Port 0 bit 0)
+        // ONLY apply Caps Shift if NOT suppressed by Symbol Shift!
+        if (this.shiftKeys.size > 0 && !hasSymShift) {
+            this.ports[0] &= 0xfe;
+        }
+
+        // 4. Apply active user keys from DOM
+        for (const item of this.activeKeys.values()) {
+            if (item.active && item.mapping) {
+                for (const [p, m] of item.mapping) {
+                    this.ports[p] &= m;
+                }
+            }
+        }
+
+        // 5. Apply heldKeys (used by headless tests & direct control)
         for (const keyId of this.heldKeys) {
             const mapping = this.resolveKeyId(keyId);
             if (mapping) {
@@ -155,6 +166,37 @@ export class AceKeyboard {
                 }
             }
         }
+    }
+
+    resolveKey(code, key) {
+        // 1. Prioritize explicit symbol / special key match by key character (e.g. '*', '+', ':', '(', ')')
+        if (key && this.keyPressMap[key]) {
+            return this.keyPressMap[key];
+        }
+
+        // 2. Letters: KeyA -> 'a'
+        if (code && code.startsWith('Key') && code.length === 4) {
+            const letter = code[3].toLowerCase();
+            return this.keyPressMap[letter] || null;
+        }
+
+        // 3. Digits: Digit8 -> '8' (if key was not a shifted symbol above)
+        if (code && code.startsWith('Digit') && code.length === 6) {
+            const digit = code[5];
+            return this.keyPressMap[digit] || null;
+        }
+
+        // 4. Code direct match (ArrowLeft, Backspace, Enter, Space, Delete, Escape, F-keys)
+        if (code && this.keyPressMap[code]) {
+            return this.keyPressMap[code];
+        }
+
+        // 5. Fallback by key
+        if (key && this.keyPressMap[key.toLowerCase()]) {
+            return this.keyPressMap[key.toLowerCase()];
+        }
+
+        return null;
     }
 
     resolveKeyId(keyId) {
@@ -247,21 +289,29 @@ export class AceKeyboard {
             ':': [SYM, [0, 0xfb]], // Sym + Z
             ';': [SYM, [5, 0xfd]], // Sym + O
             '"': [SYM, [5, 0xfe]], // Sym + P
-            '=': [SYM, [6, 0xfb]], // Sym + K
+            '\'': [SYM, [4, 0xf7]], // Sym + 7
+            '`': [SYM, [1, 0xfe]], // Sym + A
+            '~': [SYM, [1, 0xfe]], // Sym + A
+            '=': [SYM, [6, 0xfd]], // Sym + L
             '+': [SYM, [6, 0xfb]], // Sym + K
             '-': [SYM, [6, 0xf7]], // Sym + J
             '*': [SYM, [7, 0xf7]], // Sym + B
             '/': [SYM, [7, 0xef]], // Sym + V
+            '\\': [SYM, [1, 0xfb]], // Sym + D
+            '|': [SYM, [1, 0xfd]], // Sym + S
             '<': [SYM, [2, 0xf7]], // Sym + R
             '>': [SYM, [2, 0xef]], // Sym + T
             '(': [SYM, [4, 0xfb]], // Sym + 8
             ')': [SYM, [4, 0xfd]], // Sym + 9
+            '{': [SYM, [1, 0xf7]], // Sym + F
+            '}': [SYM, [1, 0xef]], // Sym + G
             ',': [SYM, [7, 0xfb]], // Sym + N
             '.': [SYM, [7, 0xfd]], // Sym + M
             '?': [SYM, [0, 0xef]], // Sym + C
             '!': [SYM, [3, 0xfe]], // Sym + 1
             '@': [SYM, [3, 0xfd]], // Sym + 2
             '#': [SYM, [3, 0xfb]], // Sym + 3
+            '£': [SYM, [0, 0xf7]], // Sym + X
             '$': [SYM, [3, 0xf7]], // Sym + 4
             '%': [SYM, [3, 0xef]], // Sym + 5
             '^': [SYM, [6, 0xef]], // Sym + H
@@ -324,24 +374,42 @@ export class AceKeyboard {
                 return;
             }
 
-            const id = (e.key && e.key.length === 1 && !e.code.startsWith('Key') && !e.code.startsWith('Digit'))
-                ? e.key
-                : (e.code || e.key);
+            // Modifier keys
+            if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                const code = e.code || 'ShiftLeft';
+                this.shiftKeys.add(code);
+                this.updateMatrix();
+                return;
+            }
 
-            // Clean up any previously held character keys to prevent Jupiter Ace matrix jamming
-            if (!['Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'Control', 'Meta'].includes(id)) {
-                for (const oldKey of this.physicallyDown) {
-                    if (!['Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'Control', 'Meta'].includes(oldKey) && oldKey !== id) {
-                        this.heldKeys.delete(oldKey);
-                        this.keyHoldFrames.delete(oldKey);
-                        this.physicallyDown.delete(oldKey);
-                    }
+            if (['Alt', 'AltLeft', 'AltRight', 'Control', 'ControlLeft', 'ControlRight', 'Meta', 'MetaLeft', 'MetaRight'].includes(e.key) ||
+                ['AltLeft', 'AltRight', 'ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight'].includes(e.code)) {
+                return;
+            }
+
+            const code = e.code || e.key;
+            const mapping = this.resolveKey(e.code, e.key);
+            if (!mapping) {
+                return;
+            }
+
+            const usesSymShift = mapping.some(m => m[0] === 0 && m[1] === 0xfd);
+
+            // Release any other character key to prevent matrix jamming
+            for (const [existingCode] of this.activeKeys) {
+                if (existingCode !== code) {
+                    this.activeKeys.delete(existingCode);
                 }
             }
 
-            this.physicallyDown.add(id);
-            this.keyHoldFrames.set(id, 0);
-            this.heldKeys.add(id);
+            this.activeKeys.set(code, {
+                mapping,
+                usesSymShift,
+                frames: 0,
+                released: false,
+                active: true
+            });
+
             this.updateMatrix();
         });
 
@@ -350,26 +418,25 @@ export class AceKeyboard {
                 return;
             }
 
-            const id1 = e.code || e.key;
-            const id2 = e.key;
-
-            this.physicallyDown.delete(id1);
-            if (id2) this.physicallyDown.delete(id2);
-
-            // If key has satisfied the 3-frame minimum interrupt sampling hold, release immediately
-            const frames1 = this.keyHoldFrames.get(id1) || 0;
-            const frames2 = id2 ? (this.keyHoldFrames.get(id2) || 0) : 0;
-
-            if (frames1 >= 3) {
-                this.heldKeys.delete(id1);
-                this.keyHoldFrames.delete(id1);
-            }
-            if (id2 && frames2 >= 3) {
-                this.heldKeys.delete(id2);
-                this.keyHoldFrames.delete(id2);
+            // Modifier keys
+            if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                this.shiftKeys.delete(e.code || 'ShiftLeft');
+                this.shiftKeys.delete('ShiftLeft');
+                this.shiftKeys.delete('ShiftRight');
+                this.updateMatrix();
+                return;
             }
 
-            this.updateMatrix();
+            const code = e.code || e.key;
+            if (this.activeKeys.has(code)) {
+                const item = this.activeKeys.get(code);
+                if (item.frames >= 3) {
+                    this.activeKeys.delete(code);
+                } else {
+                    item.released = true;
+                }
+                this.updateMatrix();
+            }
         });
 
         // Window blur -> release all keys
