@@ -139,16 +139,47 @@ export class JupiterAceEmulator {
         this.endFrame();
     }
 
-    loop() {
+    loop(timestamp) {
         if (!this.running) return;
 
-        // Auto turbo boost when spooling or pasting Forth code
-        const framesToRun = this.spooler.isActive() ? 4 : this.speedMultiplier;
-
-        for (let i = 0; i < framesToRun; i++) {
-            this.runFrame();
+        const now = timestamp || (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (!this.lastFrameTime) {
+            this.lastFrameTime = now;
+            this.lastFpsUpdate = now;
+            this.fpsFrames = 0;
         }
 
-        this.rafId = requestAnimationFrame(() => this.loop());
+        const elapsed = now - this.lastFrameTime;
+        const targetFrameTime = 1000 / 50; // 20.0 ms per 50Hz frame
+
+        let framesToAdvance = Math.floor(elapsed / targetFrameTime);
+        if (framesToAdvance > 5) {
+            framesToAdvance = 5; // Clamp to avoid burst after background tab unfocus
+            this.lastFrameTime = now;
+        }
+
+        if (framesToAdvance > 0) {
+            this.lastFrameTime += framesToAdvance * targetFrameTime;
+            const multiplier = this.spooler.isActive() ? 4 : this.speedMultiplier;
+            for (let i = 0; i < framesToAdvance * multiplier; i++) {
+                this.runFrame();
+                this.fpsFrames++;
+            }
+        }
+
+        // Update live FPS counter once per second
+        if (now - this.lastFpsUpdate >= 1000) {
+            const actualFps = Math.round((this.fpsFrames * 1000) / (now - this.lastFpsUpdate));
+            const fpsEl = typeof document !== 'undefined' ? document.getElementById('fps-counter') : null;
+            if (fpsEl) {
+                fpsEl.textContent = `${actualFps} FPS`;
+            }
+            this.fpsFrames = 0;
+            this.lastFpsUpdate = now;
+        }
+
+        if (typeof requestAnimationFrame !== 'undefined') {
+            this.rafId = requestAnimationFrame((ts) => this.loop(ts));
+        }
     }
 }

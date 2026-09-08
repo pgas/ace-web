@@ -15,10 +15,11 @@
 export class AceKeyboard {
     constructor() {
         this.ports = new Uint8Array(8);
-        this.heldKeys = new Set();      // Physical keys currently held down (by code or key)
-        this.virtualKeys = new Set();   // Programmatic / Spooler / MCP keys
-        this.arrowMode = 'qaop';        // 'qaop' (standard Sinclair/Ace gaming: Q=Up, A=Down, O=Left, P=Right) | 'native' (Shift+5,6,7,8)
-        
+        this.heldKeys = new Set();          // Keys currently in active matrix
+        this.physicallyDown = new Set();   // Keys physically held down
+        this.virtualKeys = new Set();       // Programmatic / Spooler / MCP keys
+        this.minHoldFrames = new Map();     // Prevents fast taps from being missed by 50Hz interrupt
+
         this.clear();
         this.keyPressMap = this.buildKeyMap();
         this.setupDomListeners();
@@ -27,20 +28,28 @@ export class AceKeyboard {
     clear() {
         this.ports.fill(0xff);
         this.heldKeys.clear();
+        this.physicallyDown.clear();
         this.virtualKeys.clear();
-    }
-
-    setArrowMode(mode) {
-        if (mode === 'qaop' || mode === 'native') {
-            this.arrowMode = mode;
-            this.updateMatrix();
-        }
+        this.minHoldFrames.clear();
     }
 
     tick() {
-        // Maintained for frame loop hook.
-        // Matrix is aggregate and driven by keydown/keyup events so held keys
-        // remain continuously active without artificial frame timeouts.
+        if (this.minHoldFrames.size === 0) return;
+        let changed = false;
+        for (const [keyId, frames] of this.minHoldFrames) {
+            if (frames <= 1) {
+                this.minHoldFrames.delete(keyId);
+                if (!this.physicallyDown.has(keyId)) {
+                    this.heldKeys.delete(keyId);
+                    changed = true;
+                }
+            } else {
+                this.minHoldFrames.set(keyId, frames - 1);
+            }
+        }
+        if (changed) {
+            this.updateMatrix();
+        }
     }
 
     readPort(portIndex) {
@@ -105,29 +114,6 @@ export class AceKeyboard {
     }
 
     resolveKeyId(keyId) {
-        // Check special arrow mapping first
-        if (keyId === 'ArrowLeft') {
-            return this.arrowMode === 'qaop'
-                ? [[5, 0xfd]]                     // 'o' (Left in Tut-Tut & games)
-                : [[0, 0xfe], [3, 0xef]];         // Shift + 5 (Ace cursor left)
-        }
-        if (keyId === 'ArrowRight') {
-            return this.arrowMode === 'qaop'
-                ? [[5, 0xfe]]                     // 'p' (Right in Tut-Tut & games)
-                : [[0, 0xfe], [4, 0xfb]];         // Shift + 8 (Ace cursor right)
-        }
-        if (keyId === 'ArrowUp') {
-            return this.arrowMode === 'qaop'
-                ? [[2, 0xfe]]                     // 'q' (Up in Tut-Tut & games)
-                : [[0, 0xfe], [4, 0xf7]];         // Shift + 7 (Ace cursor up)
-        }
-        if (keyId === 'ArrowDown') {
-            return this.arrowMode === 'qaop'
-                ? [[1, 0xfe]]                     // 'a' (Down in Tut-Tut & games)
-                : [[0, 0xfe], [4, 0xef]];         // Shift + 6 (Ace cursor down)
-        }
-
-        // Code mappings: KeyA..KeyZ, Digit0..Digit9
         if (keyId.startsWith('Key') && keyId.length === 4) {
             const letter = keyId[3].toLowerCase();
             return this.keyPressMap[letter] || null;
@@ -137,7 +123,6 @@ export class AceKeyboard {
             return this.keyPressMap[digit] || null;
         }
 
-        // General map lookup (Enter, Space, Backspace, Escape, Shift, punctuation, etc.)
         if (this.keyPressMap[keyId]) {
             return this.keyPressMap[keyId];
         }
@@ -184,13 +169,12 @@ export class AceKeyboard {
     }
 
     buildKeyMap() {
-        // Map keyboard Key / Code -> [ [port1, mask1], [port2, mask2] ]
         const SYM = [0, 0xfd];
         const SHIFT = [0, 0xfe];
 
         return {
             // Letters (Port 0: Z X C, Port 1: A S D F G, Port 2: Q W E R T, Port 5: P O I U Y, Port 6: L K J H, Port 7: M N B)
-            'a': [[1, 0xfe]], 'b': [[7, 0xef]], 'c': [[0, 0xef]], 'd': [[1, 0xfb]],
+            'a': [[1, 0xfe]], 'b': [[7, 0xf7]], 'c': [[0, 0xef]], 'd': [[1, 0xfb]],
             'e': [[2, 0xfb]], 'f': [[1, 0xf7]], 'g': [[1, 0xef]], 'h': [[6, 0xef]],
             'i': [[5, 0xfb]], 'j': [[6, 0xf7]], 'k': [[6, 0xfb]], 'l': [[6, 0xfd]],
             'm': [[7, 0xfd]], 'n': [[7, 0xfb]], 'o': [[5, 0xfd]], 'p': [[5, 0xfe]],
@@ -242,6 +226,12 @@ export class AceKeyboard {
             '[': [SYM, [5, 0xef]], // Sym + Y
             ']': [SYM, [5, 0xf7]], // Sym + U
 
+            // Native Cursor arrows: Shift + 5 (Left), 6 (Down), 7 (Up), 8 (Right)
+            'ArrowLeft': [SHIFT, [3, 0xef]],
+            'ArrowRight': [SHIFT, [4, 0xfb]],
+            'ArrowUp': [SHIFT, [4, 0xf7]],
+            'ArrowDown': [SHIFT, [4, 0xef]],
+
             // Function keys
             'F1': [SHIFT, [3, 0xfe]], // Delete line (Shift+1)
             'F4': [SHIFT, [3, 0xf7]], // Inverse video (Shift+4)
@@ -253,7 +243,6 @@ export class AceKeyboard {
         if (typeof window === 'undefined') return;
 
         window.addEventListener('keydown', (e) => {
-            // Ignore keystrokes when typing inside inputs or textareas
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
                 return;
             }
@@ -263,16 +252,20 @@ export class AceKeyboard {
                 e.preventDefault();
             }
 
-            // Record primary key identifier
-            // Use e.key for punctuation/symbols, e.code for physical letters/arrows/digits
+            // Discard browser OS auto-repeat to prevent double-character triggering
+            // Native Jupiter Ace ROM handles its own repeat timing at 50 Hz
+            if (e.repeat) {
+                return;
+            }
+
             const id = (e.key && e.key.length === 1 && !e.code.startsWith('Key') && !e.code.startsWith('Digit'))
                 ? e.key
                 : (e.code || e.key);
 
-            if (!this.heldKeys.has(id)) {
-                this.heldKeys.add(id);
-                this.updateMatrix();
-            }
+            this.physicallyDown.add(id);
+            this.heldKeys.add(id);
+            this.minHoldFrames.set(id, 2); // Minimum 2 frames (40ms) to ensure 50Hz interrupt sampling
+            this.updateMatrix();
         });
 
         window.addEventListener('keyup', (e) => {
@@ -283,15 +276,20 @@ export class AceKeyboard {
             const id1 = e.code || e.key;
             const id2 = e.key;
 
-            this.heldKeys.delete(id1);
-            if (id2) this.heldKeys.delete(id2);
-            this.updateMatrix();
+            this.physicallyDown.delete(id1);
+            if (id2) this.physicallyDown.delete(id2);
+
+            // If minimum hold elapsed, release immediately
+            if (!this.minHoldFrames.has(id1) && (!id2 || !this.minHoldFrames.has(id2))) {
+                this.heldKeys.delete(id1);
+                if (id2) this.heldKeys.delete(id2);
+                this.updateMatrix();
+            }
         });
 
-        // Window lost focus -> clear all held keys so no keys get stuck
+        // Window blur -> release all keys
         window.addEventListener('blur', () => {
-            this.heldKeys.clear();
-            this.updateMatrix();
+            this.clear();
         });
     }
 }
