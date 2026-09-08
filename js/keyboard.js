@@ -17,7 +17,7 @@ export class AceKeyboard {
         this.ports = new Uint8Array(8);
         this.heldKeys = new Set();          // Keys currently asserted in matrix
         this.physicallyDown = new Set();   // Keys physically held down by user
-        this.keyHoldFrames = new Map();     // Tracks frame duration for each held key
+        this.keyHoldFrames = new Map();     // Tracks frame duration for each key
         this.virtualKeys = new Set();       // Programmatic / Spooler / MCP keys
 
         this.onCopy = null;                 // Callback for Cmd+C / Ctrl+C
@@ -39,9 +39,9 @@ export class AceKeyboard {
     tick() {
         let changed = false;
 
-        // Paced repeat logic for physically held keys
+        // Process physically held keys with calibrated pacing
         for (const keyId of this.physicallyDown) {
-            // Modifiers (Shift) remain asserted continuously
+            // Modifiers (Shift) remain asserted continuously while held
             if (keyId === 'Shift' || keyId === 'ShiftLeft' || keyId === 'ShiftRight') {
                 if (!this.heldKeys.has(keyId)) {
                     this.heldKeys.add(keyId);
@@ -55,15 +55,15 @@ export class AceKeyboard {
 
             let shouldBeActive = false;
             if (frames <= 3) {
-                // Initial press pulse: 3 frames (60ms) to ensure 50Hz interrupt sampling
+                // Initial tap pulse: 3 frames (60ms) to ensure 50Hz interrupt sampling
                 shouldBeActive = true;
-            } else if (frames <= 24) {
-                // Initial repeat delay: 21 frames (~420ms) quiet period
+            } else if (frames <= 45) {
+                // Initial repeat delay: 42 frames (~850-900ms pause) - eliminates overly sensitive hair-trigger repeats
                 shouldBeActive = false;
             } else {
-                // Repeat period: 9 frames (180ms = ~5.5 repeats/sec)
-                // 3 frames active, 6 frames quiet
-                const cycle = (frames - 25) % 9;
+                // Paced repeat: 16-frame cycle (320ms = ~3.1 chars/sec)
+                // 3 frames active (60ms), 13 frames quiet (260ms)
+                const cycle = (frames - 46) % 16;
                 shouldBeActive = cycle < 3;
             }
 
@@ -73,6 +73,21 @@ export class AceKeyboard {
             } else if (!shouldBeActive && this.heldKeys.has(keyId)) {
                 this.heldKeys.delete(keyId);
                 changed = true;
+            }
+        }
+
+        // Clean up keys that were physically released after reaching minimum 3 frames
+        for (const [keyId, frames] of this.keyHoldFrames) {
+            if (!this.physicallyDown.has(keyId)) {
+                const nextFrames = frames + 1;
+                this.keyHoldFrames.set(keyId, nextFrames);
+                if (nextFrames >= 3) {
+                    this.keyHoldFrames.delete(keyId);
+                    if (this.heldKeys.has(keyId)) {
+                        this.heldKeys.delete(keyId);
+                        changed = true;
+                    }
+                }
             }
         }
 
@@ -304,7 +319,7 @@ export class AceKeyboard {
                 e.preventDefault();
             }
 
-            // Discard browser OS auto-repeat events; repeat pacing is managed in tick()
+            // Discard browser OS auto-repeat events; repeat pacing is managed deliberately in tick()
             if (e.repeat) {
                 return;
             }
@@ -312,6 +327,17 @@ export class AceKeyboard {
             const id = (e.key && e.key.length === 1 && !e.code.startsWith('Key') && !e.code.startsWith('Digit'))
                 ? e.key
                 : (e.code || e.key);
+
+            // Clean up any previously held character keys to prevent Jupiter Ace matrix jamming
+            if (!['Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'Control', 'Meta'].includes(id)) {
+                for (const oldKey of this.physicallyDown) {
+                    if (!['Shift', 'ShiftLeft', 'ShiftRight', 'Alt', 'Control', 'Meta'].includes(oldKey) && oldKey !== id) {
+                        this.heldKeys.delete(oldKey);
+                        this.keyHoldFrames.delete(oldKey);
+                        this.physicallyDown.delete(oldKey);
+                    }
+                }
+            }
 
             this.physicallyDown.add(id);
             this.keyHoldFrames.set(id, 0);
@@ -328,13 +354,19 @@ export class AceKeyboard {
             const id2 = e.key;
 
             this.physicallyDown.delete(id1);
-            this.keyHoldFrames.delete(id1);
-            this.heldKeys.delete(id1);
+            if (id2) this.physicallyDown.delete(id2);
 
-            if (id2) {
-                this.physicallyDown.delete(id2);
-                this.keyHoldFrames.delete(id2);
+            // If key has satisfied the 3-frame minimum interrupt sampling hold, release immediately
+            const frames1 = this.keyHoldFrames.get(id1) || 0;
+            const frames2 = id2 ? (this.keyHoldFrames.get(id2) || 0) : 0;
+
+            if (frames1 >= 3) {
+                this.heldKeys.delete(id1);
+                this.keyHoldFrames.delete(id1);
+            }
+            if (id2 && frames2 >= 3) {
                 this.heldKeys.delete(id2);
+                this.keyHoldFrames.delete(id2);
             }
 
             this.updateMatrix();

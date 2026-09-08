@@ -12,7 +12,6 @@
     <!-- Header & Brand -->
     <header>
         <div class="brand">
-            <div class="brand-icon">J</div>
             <div class="brand-title">
                 <h1>SDLAce Web</h1>
                 <p>Pure Browser-Based Jupiter ACE Forth Microcomputer</p>
@@ -21,9 +20,6 @@
         <div class="header-actions">
             <button id="btn-toggle-debugger" class="btn" title="Toggle Z80 & Forth Debugger HUD">
                 🐞 Debugger HUD
-            </button>
-            <button id="btn-spool-modal" class="btn btn-primary" title="Paste or Spool Forth Code">
-                📜 Spool / Paste Forth
             </button>
         </div>
     </header>
@@ -128,7 +124,6 @@
                     <div class="control-row">
                         <input type="file" id="spool-file-input" accept=".fth,.txt,.forth,.ace" style="display: none;">
                         <button id="btn-upload-spool" class="btn btn-sm">📁 Upload Forth File</button>
-                        <button id="btn-spool-modal" class="btn btn-sm">📋 Paste Code</button>
                         <button id="btn-stop-spool" class="btn btn-danger btn-sm" style="display: none;">⏹ Stop</button>
                     </div>
                     <div class="progress-bar-container">
@@ -425,7 +420,6 @@
         };
 
         emu.keyboard.onPaste = handlePasteCode;
-        document.getElementById('btn-spool-modal').addEventListener('click', handlePasteCode);
 
         btnUploadSpool.addEventListener('click', () => {
             spoolFileInput.click();
