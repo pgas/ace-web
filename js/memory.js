@@ -67,6 +67,10 @@ export class AceMemory {
     reset() {
         // RAM area initialized to 0xFF as on hardware power-on
         this.mem.fill(0xff, 8192, 65536);
+        // Initialize Video RAM (both front door and back door 0x2000-0x27FF) to 0x20 (ASCII Space)
+        // and Charset RAM (0x2800-0x2FFF) to 0x00 so the screen starts 100% solid white
+        this.mem.fill(0x20, 0x2000, 0x2800);
+        this.mem.fill(0x00, 0x2800, 0x3000);
         this.applyTapePatches();
     }
 

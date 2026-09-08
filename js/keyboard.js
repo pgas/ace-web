@@ -15,10 +15,13 @@
 export class AceKeyboard {
     constructor() {
         this.ports = new Uint8Array(8);
-        this.heldKeys = new Set();          // Keys currently in active matrix
-        this.physicallyDown = new Set();   // Keys physically held down
+        this.heldKeys = new Set();          // Keys currently asserted in matrix
+        this.physicallyDown = new Set();   // Keys physically held down by user
+        this.keyHoldFrames = new Map();     // Tracks frame duration for each held key
         this.virtualKeys = new Set();       // Programmatic / Spooler / MCP keys
-        this.minHoldFrames = new Map();     // Prevents fast taps from being missed by 50Hz interrupt
+
+        this.onCopy = null;                 // Callback for Cmd+C / Ctrl+C
+        this.onPaste = null;                // Callback for Cmd+V / Ctrl+V
 
         this.clear();
         this.keyPressMap = this.buildKeyMap();
@@ -29,24 +32,50 @@ export class AceKeyboard {
         this.ports.fill(0xff);
         this.heldKeys.clear();
         this.physicallyDown.clear();
+        this.keyHoldFrames.clear();
         this.virtualKeys.clear();
-        this.minHoldFrames.clear();
     }
 
     tick() {
-        if (this.minHoldFrames.size === 0) return;
         let changed = false;
-        for (const [keyId, frames] of this.minHoldFrames) {
-            if (frames <= 1) {
-                this.minHoldFrames.delete(keyId);
-                if (!this.physicallyDown.has(keyId)) {
-                    this.heldKeys.delete(keyId);
+
+        // Paced repeat logic for physically held keys
+        for (const keyId of this.physicallyDown) {
+            // Modifiers (Shift) remain asserted continuously
+            if (keyId === 'Shift' || keyId === 'ShiftLeft' || keyId === 'ShiftRight') {
+                if (!this.heldKeys.has(keyId)) {
+                    this.heldKeys.add(keyId);
                     changed = true;
                 }
+                continue;
+            }
+
+            const frames = (this.keyHoldFrames.get(keyId) || 0) + 1;
+            this.keyHoldFrames.set(keyId, frames);
+
+            let shouldBeActive = false;
+            if (frames <= 3) {
+                // Initial press pulse: 3 frames (60ms) to ensure 50Hz interrupt sampling
+                shouldBeActive = true;
+            } else if (frames <= 24) {
+                // Initial repeat delay: 21 frames (~420ms) quiet period
+                shouldBeActive = false;
             } else {
-                this.minHoldFrames.set(keyId, frames - 1);
+                // Repeat period: 9 frames (180ms = ~5.5 repeats/sec)
+                // 3 frames active, 6 frames quiet
+                const cycle = (frames - 25) % 9;
+                shouldBeActive = cycle < 3;
+            }
+
+            if (shouldBeActive && !this.heldKeys.has(keyId)) {
+                this.heldKeys.add(keyId);
+                changed = true;
+            } else if (!shouldBeActive && this.heldKeys.has(keyId)) {
+                this.heldKeys.delete(keyId);
+                changed = true;
             }
         }
+
         if (changed) {
             this.updateMatrix();
         }
@@ -92,7 +121,7 @@ export class AceKeyboard {
     updateMatrix() {
         this.ports.fill(0xff);
 
-        // 1. Apply programmatically pressed keys (Spooler, MCP, buttons)
+        // 1. Apply programmatically pressed keys (Spooler, MCP)
         for (const vk of this.virtualKeys) {
             const mapping = this.getCharMapping(vk);
             if (mapping) {
@@ -102,7 +131,7 @@ export class AceKeyboard {
             }
         }
 
-        // 2. Apply physically held keys
+        // 2. Apply active user keys
         for (const keyId of this.heldKeys) {
             const mapping = this.resolveKeyId(keyId);
             if (mapping) {
@@ -247,13 +276,35 @@ export class AceKeyboard {
                 return;
             }
 
-            // Prevent default page scrolling / browser behavior on game keys
+            // Command-C / Ctrl-C: Copy text without sending 'C' to Jupiter Ace
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C' || e.code === 'KeyC')) {
+                e.preventDefault();
+                if (this.onCopy) {
+                    this.onCopy();
+                }
+                return;
+            }
+
+            // Command-V / Ctrl-V: Paste Forth code without sending 'V' to Jupiter Ace
+            if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V' || e.code === 'KeyV')) {
+                e.preventDefault();
+                if (this.onPaste) {
+                    this.onPaste();
+                }
+                return;
+            }
+
+            // Let other system hotkeys pass through
+            if (e.metaKey || e.ctrlKey) {
+                return;
+            }
+
+            // Prevent default browser scrolling / actions on navigation & space
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) {
                 e.preventDefault();
             }
 
-            // Discard browser OS auto-repeat to prevent double-character triggering
-            // Native Jupiter Ace ROM handles its own repeat timing at 50 Hz
+            // Discard browser OS auto-repeat events; repeat pacing is managed in tick()
             if (e.repeat) {
                 return;
             }
@@ -263,8 +314,8 @@ export class AceKeyboard {
                 : (e.code || e.key);
 
             this.physicallyDown.add(id);
+            this.keyHoldFrames.set(id, 0);
             this.heldKeys.add(id);
-            this.minHoldFrames.set(id, 2); // Minimum 2 frames (40ms) to ensure 50Hz interrupt sampling
             this.updateMatrix();
         });
 
@@ -277,14 +328,16 @@ export class AceKeyboard {
             const id2 = e.key;
 
             this.physicallyDown.delete(id1);
-            if (id2) this.physicallyDown.delete(id2);
+            this.keyHoldFrames.delete(id1);
+            this.heldKeys.delete(id1);
 
-            // If minimum hold elapsed, release immediately
-            if (!this.minHoldFrames.has(id1) && (!id2 || !this.minHoldFrames.has(id2))) {
-                this.heldKeys.delete(id1);
-                if (id2) this.heldKeys.delete(id2);
-                this.updateMatrix();
+            if (id2) {
+                this.physicallyDown.delete(id2);
+                this.keyHoldFrames.delete(id2);
+                this.heldKeys.delete(id2);
             }
+
+            this.updateMatrix();
         });
 
         // Window blur -> release all keys

@@ -65,7 +65,6 @@
             <button id="key-del-line" class="key-chip" title="Delete current line (F1 / Shift+1)">DEL LINE (F1)</button>
             <button id="key-inverse" class="key-chip" title="Toggle Inverse Video (F4 / Shift+4)">INVERSE (F4)</button>
             <button id="key-graphics" class="key-chip" title="Toggle Graphics Mode (F9 / Shift+9)">GRAPHICS (F9)</button>
-            <button id="key-copy" class="key-chip" title="Copy Selected Screen Text">COPY TEXT</button>
         </div>
 
         <!-- Control Decks -->
@@ -372,10 +371,30 @@
         document.getElementById('key-inverse').addEventListener('click', () => triggerKey('F4'));
         document.getElementById('key-graphics').addEventListener('click', () => triggerKey('F9'));
 
-        document.getElementById('key-copy').addEventListener('click', () => {
+        // Toast notification helper
+        const showToast = (msg) => {
+            let toast = document.getElementById('toast-notify');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'toast-notify';
+                toast.style.cssText = 'position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(6, 182, 212, 0.95); color: #000; padding: 8px 18px; border-radius: 20px; font-weight: 600; font-size: 12px; z-index: 999; box-shadow: 0 4px 14px rgba(0,0,0,0.6); transition: opacity 0.3s ease; pointer-events: none; opacity: 0;';
+                document.body.appendChild(toast);
+            }
+            toast.textContent = msg;
+            toast.style.opacity = '1';
+            clearTimeout(toast.timer);
+            toast.timer = setTimeout(() => { toast.style.opacity = '0'; }, 2200);
+        };
+
+        // Cmd+C / Ctrl+C Copy Screen Text handler
+        emu.keyboard.onCopy = () => {
             const txt = emu.video.getSelectedText(emu.memory.getVideoRam()) || window.__ace.getScreenText();
-            navigator.clipboard.writeText(txt).then(() => alert('Copied screen text to clipboard!'));
-        });
+            navigator.clipboard.writeText(txt).then(() => {
+                showToast('Screen text copied to clipboard (Cmd+C)');
+            }).catch(() => {
+                showToast('Copied text!');
+            });
+        };
 
         // Forth Source Spooler UI
         const spoolModal = document.getElementById('spool-modal');
@@ -385,6 +404,28 @@
         const btnStopSpool = document.getElementById('btn-stop-spool');
         const btnUploadSpool = document.getElementById('btn-upload-spool');
         const spoolFileInput = document.getElementById('spool-file-input');
+
+        // Paste Code handler: reads clipboard directly or falls back to modal
+        const handlePasteCode = async () => {
+            try {
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const text = await navigator.clipboard.readText();
+                    if (text && text.trim().length > 0) {
+                        showToast(`Pasting ${text.length} chars into Forth...`);
+                        spoolStatus.textContent = `Pasting from clipboard...`;
+                        emu.spooler.spoolText(text, true);
+                        return;
+                    }
+                }
+            } catch (err) {
+                // Clipboard read permission prompt or blocked -> open modal
+            }
+            spoolModal.classList.add('active');
+            spoolTextarea.focus();
+        };
+
+        emu.keyboard.onPaste = handlePasteCode;
+        document.getElementById('btn-spool-modal').addEventListener('click', handlePasteCode);
 
         btnUploadSpool.addEventListener('click', () => {
             spoolFileInput.click();
@@ -402,9 +443,6 @@
             reader.readAsText(file);
         });
 
-        document.getElementById('btn-spool-modal').addEventListener('click', () => {
-            spoolModal.classList.add('active');
-        });
         document.getElementById('btn-close-spool-modal').addEventListener('click', () => {
             spoolModal.classList.remove('active');
         });
