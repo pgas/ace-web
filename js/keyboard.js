@@ -19,6 +19,7 @@ export class AceKeyboard {
         this.shiftKeys = new Set();         // e.code for active shift keys ('ShiftLeft', 'ShiftRight')
         this.virtualKeys = new Set();       // Programmatic / Spooler / MCP keys
         this.heldKeys = new Set();          // Compatibility set for headless tests & direct control
+        this.deadKeyPending = null;         // Tracks dead keys (e.g. Quote on US-Intl) to handle space absorption
 
         this.onCopy = null;                 // Callback for Cmd+C / Ctrl+C
         this.onPaste = null;                // Callback for Cmd+V / Ctrl+V
@@ -34,6 +35,7 @@ export class AceKeyboard {
         this.shiftKeys.clear();
         this.virtualKeys.clear();
         this.heldKeys.clear();
+        this.deadKeyPending = null;
     }
 
     tick() {
@@ -42,8 +44,8 @@ export class AceKeyboard {
         for (const [code, item] of this.activeKeys) {
             item.frames++;
 
-            // If key was physically released and completed minimum 3-frame hold for ROM sampling
-            if (item.released && item.frames >= 3) {
+            // If key was physically released or transient composition key after 3 frames
+            if ((item.released || code === 'CompositionKey') && item.frames >= 3) {
                 this.activeKeys.delete(code);
                 changed = true;
                 continue;
@@ -168,30 +170,66 @@ export class AceKeyboard {
         }
     }
 
-    resolveKey(code, key) {
-        // 1. Prioritize explicit symbol / special key match by key character (e.g. '*', '+', ':', '(', ')')
-        if (key && this.keyPressMap[key]) {
+    resolveKey(code, key, shift = false) {
+        // 1. Prioritize explicit symbol / character match when key is a real character (not 'Dead')
+        if (key && key !== 'Dead' && this.keyPressMap[key]) {
             return this.keyPressMap[key];
         }
 
-        // 2. Letters: KeyA -> 'a'
+        // 2. Physical Dead Key handling (US International / European layouts)
+        if (key === 'Dead' || !key) {
+            if (code === 'Quote') {
+                return shift ? this.keyPressMap['"'] : this.keyPressMap['\''];
+            }
+            if (code === 'Backquote') {
+                return shift ? this.keyPressMap['~'] : this.keyPressMap['`'];
+            }
+            if (code === 'Digit6') {
+                return shift ? this.keyPressMap['^'] : this.keyPressMap['6'];
+            }
+            if (code === 'Equal') {
+                return shift ? this.keyPressMap['+'] : this.keyPressMap['='];
+            }
+            if (code === 'Minus') {
+                return shift ? this.keyPressMap['_'] : this.keyPressMap['-'];
+            }
+            if (code === 'Semicolon') {
+                return shift ? this.keyPressMap[':'] : this.keyPressMap[';'];
+            }
+            if (code === 'Slash') {
+                return shift ? this.keyPressMap['?'] : this.keyPressMap['/'];
+            }
+        }
+
+        // 3. Letters: KeyA -> 'a'
         if (code && code.startsWith('Key') && code.length === 4) {
             const letter = code[3].toLowerCase();
             return this.keyPressMap[letter] || null;
         }
 
-        // 3. Digits: Digit8 -> '8' (if key was not a shifted symbol above)
+        // 4. Digits: Digit8 -> '8' (if key was not a shifted symbol above)
         if (code && code.startsWith('Digit') && code.length === 6) {
             const digit = code[5];
             return this.keyPressMap[digit] || null;
         }
 
-        // 4. Code direct match (ArrowLeft, Backspace, Enter, Space, Delete, Escape, F-keys)
+        // 5. Physical code fallback for Quote / Backquote / symbols
+        if (code === 'Quote') {
+            return shift ? this.keyPressMap['"'] : this.keyPressMap['\''];
+        }
+        if (code === 'Backquote') {
+            return shift ? this.keyPressMap['~'] : this.keyPressMap['`'];
+        }
+        if (code === 'Digit6' && shift) {
+            return this.keyPressMap['^'];
+        }
+
+        // 6. Code direct match (ArrowLeft, Backspace, Enter, Space, Delete, Escape, F-keys)
         if (code && this.keyPressMap[code]) {
             return this.keyPressMap[code];
         }
 
-        // 5. Fallback by key
+        // 7. Fallback by key
         if (key && this.keyPressMap[key.toLowerCase()]) {
             return this.keyPressMap[key.toLowerCase()];
         }
@@ -343,7 +381,7 @@ export class AceKeyboard {
 
             // Command-C / Ctrl-C: Copy text without sending 'C' to Jupiter Ace
             if ((e.metaKey || e.ctrlKey) && (e.key === 'c' || e.key === 'C' || e.code === 'KeyC')) {
-                e.preventDefault();
+                if (e.preventDefault) e.preventDefault();
                 if (this.onCopy) {
                     this.onCopy();
                 }
@@ -352,7 +390,7 @@ export class AceKeyboard {
 
             // Command-V / Ctrl-V: Paste Forth code without sending 'V' to Jupiter Ace
             if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V' || e.code === 'KeyV')) {
-                e.preventDefault();
+                if (e.preventDefault) e.preventDefault();
                 if (this.onPaste) {
                     this.onPaste();
                 }
@@ -365,8 +403,9 @@ export class AceKeyboard {
             }
 
             // Prevent default browser scrolling / actions on navigation & space
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key)) {
-                e.preventDefault();
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab', 'Backspace'].includes(e.key) ||
+                e.code === 'Quote' || e.code === 'Backquote') {
+                if (e.preventDefault) e.preventDefault();
             }
 
             // Discard browser OS auto-repeat events; repeat pacing is managed deliberately in tick()
@@ -387,8 +426,32 @@ export class AceKeyboard {
                 return;
             }
 
+            // Handle dead-key follow-up with Space:
+            // In US-International layout, users press Dead Key + Space to finalize the standalone symbol (e.g. Shift+' then Space = ").
+            if (e.code === 'Space' && this.deadKeyPending) {
+                const elapsed = Date.now() - this.deadKeyPending.time;
+                this.deadKeyPending = null;
+                if (elapsed < 600) {
+                    // Space was pressed solely to release the dead key; absorb it so it doesn't emit a trailing space
+                    if (e.preventDefault) e.preventDefault();
+                    return;
+                }
+            }
+
+            const isShift = this.shiftKeys.size > 0 || e.shiftKey;
+
+            // If a dead key was pressed, remember it so a subsequent space within 600ms can be absorbed
+            if (e.key === 'Dead') {
+                this.deadKeyPending = {
+                    code: e.code,
+                    time: Date.now()
+                };
+            } else if (e.code !== 'ShiftLeft' && e.code !== 'ShiftRight') {
+                this.deadKeyPending = null;
+            }
+
             const code = e.code || e.key;
-            const mapping = this.resolveKey(e.code, e.key);
+            const mapping = this.resolveKey(e.code, e.key, isShift);
             if (!mapping) {
                 return;
             }
@@ -436,6 +499,29 @@ export class AceKeyboard {
                     item.released = true;
                 }
                 this.updateMatrix();
+            }
+        });
+
+        // Fallback for IME composition completion (e.g. accented dead keys)
+        window.addEventListener('compositionend', (e) => {
+            if (!e.data) return;
+            for (const ch of e.data) {
+                if (['"', '\'', '^', '~', '`'].includes(ch)) {
+                    if (this.activeKeys.size === 0) {
+                        const mapping = this.keyPressMap[ch];
+                        if (mapping) {
+                            const usesSymShift = mapping.some(m => m[0] === 0 && m[1] === 0xfd);
+                            this.activeKeys.set('CompositionKey', {
+                                mapping,
+                                usesSymShift,
+                                frames: 0,
+                                released: false,
+                                active: true
+                            });
+                            this.updateMatrix();
+                        }
+                    }
+                }
             }
         });
 

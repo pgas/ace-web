@@ -40,6 +40,7 @@ var window = {
         windowListeners[type].push(fn);
     },
     dispatchEvent: (ev) => {
+        ev.preventDefault = ev.preventDefault || (() => {});
         if (windowListeners[ev.type]) {
             windowListeners[ev.type].forEach(fn => fn(ev));
         }
@@ -169,6 +170,38 @@ if (emu.keyboard.ports[0] === 0xfd && emu.keyboard.ports[6] === 0xfd) {
 }
 emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
 window.dispatchEvent({ type: 'keyup', code: 'Equal', key: '=' });
+emu.keyboard.clear();
+
+// US-International Dead Key Test: Shift + Quote (key='Dead') produces double-quote '"' (Symbol Shift + P)
+window.dispatchEvent({ type: 'keydown', code: 'ShiftLeft', key: 'Shift' });
+window.dispatchEvent({ type: 'keydown', code: 'Quote', key: 'Dead', shiftKey: true });
+if (emu.keyboard.ports[0] === 0xfd && emu.keyboard.ports[5] === 0xfe) {
+    console.log("[PASS] US-Intl Dead Key: Shift+Quote (key='Dead') produces Symbol Shift (0xfd) + P (0xfe) for '\"'");
+} else {
+    console.error("[FAIL] US-Intl Dead Key: Shift+Quote expected Port 0=0xfd, Port 5=0xfe, got Port 0=0x" + emu.keyboard.ports[0].toString(16) + " Port 5=0x" + emu.keyboard.ports[5].toString(16));
+}
+emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
+window.dispatchEvent({ type: 'keyup', code: 'Quote', key: 'Dead' });
+window.dispatchEvent({ type: 'keyup', code: 'ShiftLeft', key: 'Shift' });
+
+// Follow-up Spacebar after Dead key within 600ms should be absorbed (not emit trailing space)
+window.dispatchEvent({ type: 'keydown', code: 'Space', key: ' ' });
+if (emu.keyboard.ports[7] === 0xff) {
+    console.log("[PASS] US-Intl Dead Key: Follow-up spacebar correctly absorbed without polluting screen");
+} else {
+    console.error("[FAIL] US-Intl Dead Key: Follow-up spacebar leaked into matrix, Port 7=0x" + emu.keyboard.ports[7].toString(16));
+}
+emu.keyboard.clear();
+
+// US-International Dead Key: Bare Quote (key='Dead', no shift) produces apostrophe '\'' (Symbol Shift + 7)
+window.dispatchEvent({ type: 'keydown', code: 'Quote', key: 'Dead', shiftKey: false });
+if (emu.keyboard.ports[0] === 0xfd && emu.keyboard.ports[4] === 0xf7) {
+    console.log("[PASS] US-Intl Dead Key: Bare Quote (key='Dead') produces Symbol Shift (0xfd) + 7 (0xf7) for '\''");
+} else {
+    console.error("[FAIL] US-Intl Dead Key: Bare Quote expected Port 0=0xfd, Port 4=0xf7, got Port 0=0x" + emu.keyboard.ports[0].toString(16) + " Port 4=0x" + emu.keyboard.ports[4].toString(16));
+}
+emu.keyboard.tick(); emu.keyboard.tick(); emu.keyboard.tick();
+window.dispatchEvent({ type: 'keyup', code: 'Quote', key: 'Dead' });
 emu.keyboard.clear();
 
 // Test 4: Audio Subsystem & Speaker Toggling (BEEP execution)
