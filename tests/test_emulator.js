@@ -280,5 +280,29 @@ if (stackAfterAdd.depth === 2 && stackAfterAdd.items[1].sval === 50) {
     console.error("[FAIL] Forth Stack operation mismatch: depth=" + stackAfterAdd.depth);
 }
 
+// Test 7: Forth Spooler Comment Preprocessing (\ and ( ) stripping)
+const commentSnippet = " DEFINER STRING\n  34 WORD          \\ parse up to '\"' (ASCII 34), leaves counted string at HERE\n  DUP C@ 1+ ALLOT  \\ reserve the bytes in the dictionary\nDOES> ( -- addr len )\n  DUP 1+ SWAP C@ ; \\ push ( addr len ) directly to the stack when called \n";
+const preprocessed = emu.spooler.preprocessForth(commentSnippet);
+const expectedClean = "DEFINER STRING\n34 WORD\nDUP C@ 1+ ALLOT\nDOES>\nDUP 1+ SWAP C@ ;\n";
+if (preprocessed === expectedClean) {
+    console.log("[PASS] Forth Spooler: Successfully stripped all \\ and ( ) comments from script");
+} else {
+    console.error("[FAIL] Forth Spooler preprocessor output mismatch:\nGot: " + JSON.stringify(preprocessed) + "\nExpected: " + JSON.stringify(expectedClean));
+}
+
+// Test 8: Correct Jupiter ACE String Definer (using C, into dictionary)
+emu.reset();
+for (let f = 0; f < 80; f++) emu.runFrame();
+const correctStringDefiner = "DEFINER STRING\n34 WORD DUP C@ 1+ 0 DO DUP I + C@ C, LOOP DROP\nDOES>\nDUP 1+ SWAP C@ ;\nSTRING MSG HELLO, JUPITER ACE!\"\nMSG TYPE\n";
+emu.spooler.spoolText(correctStringDefiner, true);
+while (emu.spooler.isActive()) emu.runFrame();
+for (let f = 0; f < 80; f++) emu.runFrame();
+const stringScreen = window.__ace.getScreenText();
+if (stringScreen.indexOf("HELLO, JUPITER ACE!") !== -1) {
+    console.log("[PASS] Jupiter ACE Forth: String definer successfully compiled and printed string");
+} else {
+    console.error("[FAIL] Jupiter ACE Forth: String definer output unexpected:\n" + stringScreen);
+}
+
 console.log("=== All Tests Completed Successfully ===");
 

@@ -24,39 +24,41 @@ export class AceSpooler {
 
     /**
      * Preprocesses Forth source:
-     * - Strips ( ... ) comments outside colon definitions
-     * - Removes blank lines
+     * - Strips \ line comments (standard Forth and Ace Forth scripts)
+     * - Strips ( ... ) parenthesized comments (which trigger ERROR 4 in Ace interpret mode)
+     * - Preserves string literals (." ... ", S" ... ")
+     * - Removes empty/blank lines
      */
     preprocessForth(text) {
         if (!text) return '';
         const hadTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
-        // Strip carriage returns
         text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const lines = text.split('\n');
         const processedLines = [];
-        let insideColon = false;
 
         for (let line of lines) {
             let trimmed = line.trim();
             if (!trimmed) continue;
 
-            // Check if line enters or exits colon definition
-            if (trimmed.startsWith(':')) {
-                insideColon = true;
-            }
+            // Protect Forth string literals (." ... ", S" ... ", ABORT" ... ")
+            const strings = [];
+            let clean = trimmed.replace(/(\b(?:[.]|S|ABORT)"\s[^"]*")/gi, (m) => {
+                strings.push(m);
+                return `__FORTH_STR_${strings.length - 1}__`;
+            });
 
-            if (!insideColon) {
-                // Strip all comments ( ... )
-                trimmed = trimmed.replace(/\([^\)]*\)/g, '').trim();
-            }
+            // Strip backslash line comments (\ to end of line)
+            clean = clean.replace(/(^|\s)\\(\s.*|$)/, '');
 
-            if (trimmed.endsWith(';')) {
-                insideColon = false;
-            }
+            // Strip parenthesized comments (( ... ))
+            clean = clean.replace(/\([^\)]*\)/g, '');
 
-            if (trimmed.length > 0) {
-                // Enforce Jupiter ACE 32-40 character line limit to prevent line editor overflow
-                processedLines.push(trimmed);
+            // Restore string literals
+            clean = clean.replace(/__FORTH_STR_(\d+)__/g, (_, idx) => strings[parseInt(idx, 10)]);
+
+            clean = clean.trim();
+            if (clean.length > 0) {
+                processedLines.push(clean);
             }
         }
 

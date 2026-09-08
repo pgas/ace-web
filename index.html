@@ -391,12 +391,14 @@
                         showToast(`Pasting ${text.length} chars into Forth...`);
                         spoolStatus.textContent = `Pasting from clipboard...`;
                         emu.spooler.spoolText(text, true);
+                        spoolTextarea.value = '';
                         return;
                     }
                 }
             } catch (err) {
                 // Clipboard read permission prompt or blocked -> open modal
             }
+            spoolTextarea.value = '';
             spoolModal.classList.add('active');
             spoolTextarea.focus();
         };
@@ -421,9 +423,11 @@
 
         document.getElementById('btn-close-spool-modal').addEventListener('click', () => {
             spoolModal.classList.remove('active');
+            spoolTextarea.value = '';
         });
         document.getElementById('btn-cancel-spool').addEventListener('click', () => {
             spoolModal.classList.remove('active');
+            spoolTextarea.value = '';
         });
 
         document.getElementById('btn-start-spool').addEventListener('click', () => {
@@ -431,8 +435,24 @@
             if (code) {
                 emu.spooler.spoolText(code, true);
                 spoolModal.classList.remove('active');
+                spoolTextarea.value = '';
             }
         });
+
+        spoolModal.addEventListener('click', (e) => {
+            if (e.target === spoolModal) {
+                spoolModal.classList.remove('active');
+                spoolTextarea.value = '';
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && spoolModal.classList.contains('active')) {
+                spoolModal.classList.remove('active');
+                spoolTextarea.value = '';
+                e.stopPropagation();
+            }
+        }, true);
 
         btnStopSpool.addEventListener('click', () => {
             emu.spooler.stop();
