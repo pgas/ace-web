@@ -28,6 +28,8 @@ export class AceSpooler {
      * - Removes blank lines
      */
     preprocessForth(text) {
+        if (!text) return '';
+        const hadTrailingNewline = text.endsWith('\n') || text.endsWith('\r');
         // Strip carriage returns
         text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const lines = text.split('\n');
@@ -58,7 +60,11 @@ export class AceSpooler {
             }
         }
 
-        return processedLines.join('\n') + '\n';
+        let result = processedLines.join('\n');
+        if (hadTrailingNewline && result.length > 0) {
+            result += '\n';
+        }
+        return result;
     }
 
     spoolText(text, isForth = true) {
