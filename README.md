@@ -4,11 +4,15 @@ A pure client-side browser-based JavaScript/HTML5 emulator for the **Jupiter ACE
 
 Zero build step, zero dependencies, runs directly in any modern web browser.
 
+🎮 **Live Version**: [https://pgas.github.io/ace-web/](https://pgas.github.io/ace-web/)
+
 ---
 
 ## Acknowledgments
 
-This project was translated to pure browser-based JavaScript using AI from [xAce](https://github.com/lawrencewoodman/xAce) by Lawrence Woodman.
+- **Base Implementation**: Translated to pure browser-based JavaScript using AI from [xAce](https://github.com/lawrencewoodman/xAce) by Lawrence Woodman.
+- **Z80 Emulation**: Powered by [Z80.js](https://github.com/molly/z80) by Molly Howell (MIT License), an instruction-accurate Zilog Z80 emulator interpreter in JavaScript.
+- **Published Online Version**: Available online via GitHub Pages at [https://pgas.github.io/ace-web/](https://pgas.github.io/ace-web/) (Repository: [https://github.com/pgas/ace-web](https://github.com/pgas/ace-web)).
 
 ---
 
@@ -113,3 +117,4 @@ ace-web/
 
 GNU General Public License v2.0 or later (GPL-2.0-or-later).
 Based on [xAce](https://github.com/lawrencewoodman/xAce) by Lawrence Woodman and the Jupiter ACE hardware architecture (Cantab Ltd).
+Z80 CPU emulation module (`js/z80.js`) is copyright (c) Molly Howell and released under the [MIT License](https://opensource.org/licenses/MIT).
