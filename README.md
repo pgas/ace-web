@@ -4,7 +4,11 @@ A pure client-side browser-based JavaScript/HTML5 emulator for the **Jupiter ACE
 
 Zero build step, zero dependencies, runs directly in any modern web browser.
 
-![Jupiter ACE Web](images/ace_logo.png)
+---
+
+## Acknowledgments
+
+This project was translated to pure browser-based JavaScript using AI from [xAce](https://github.com/lawrencewoodman/xAce) by Lawrence Woodman.
 
 ---
 
@@ -28,14 +32,13 @@ Zero build step, zero dependencies, runs directly in any modern web browser.
   - Case- and punctuation-insensitive matching.
   - User tape attachment and tape export/download.
 - **Forth Source Spooler**:
-  - File uploader (`.fth`, `.txt`, `.forth`, `.ace`) and clipboard paste modal.
+  - File uploader (`.fth`, `.txt`, `.forth`, `.ace`) and clipboard paste support.
   - Automatic comment stripping (`( ... )` outside colon definitions) to prevent Ace ROM `ERROR 4`.
   - Paced keyboard feeding (key down, key up, and compilation delays) with automatic Turbo speedup.
 - **Keyboard & Gaming Engine**:
   - Full Jupiter ACE 8-port keyboard matrix (`0xFEFE`..`0x7FFE`).
   - Aggregate non-blocking matrix architecture: supports continuous key holds for fast gaming.
-  - Switchable Arrow Keys mode: `Q/A/O/P` (Tut-Tut and classic games) or Native Jupiter Ace (`Shift + 5, 6, 7, 8`).
-- **In-Browser Debugger HUD**:key frame limiter preventing ROM auto-repeat runaway in 4x Turbo mode.
+  - Calibrated repeat delay and rate for comfortable Forth typing without dropped keys or accidental repeats.
 - **Developer & Agent Integration**:
   - **HUD Debugger**: Live register inspector (PC, SP, AF, BC, DE, HL, IX, IY, flags), Forth system variables (`BASE`, `FRAMES`, `STKBOT`, `DICT`, `ERR_NO`), memory hex dump, and dictionary browser.
   - **Model Context Protocol (MCP)**: Bundled Python MCP server (`mcp/mcp_ace_server.py`) and browser automation bridge (`window.__ace`).
@@ -109,4 +112,4 @@ ace-web/
 ## License
 
 GNU General Public License v2.0 or later (GPL-2.0-or-later).
-Based on the Jupiter ACE hardware architecture (Cantab Ltd) and battle-tested Z80 emulation cores.
+Based on [xAce](https://github.com/lawrencewoodman/xAce) by Lawrence Woodman and the Jupiter ACE hardware architecture (Cantab Ltd).

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-mcp_ace_server.py - Model Context Protocol (MCP) & Debugging Server for SDLAce Web
+mcp_ace_server.py - Model Context Protocol (MCP) & Debugging Server for Jupiter ACE Web
 
 Exposes tools for AI agents (Antigravity, Claude, etc.) to inspect and debug
 the Jupiter ACE Forth environment, Z80 CPU state, memory, system variables,
@@ -131,4 +131,4 @@ if __name__ == "__main__":
         print("[*] Testing ace_diagnose_error(4):", handle_tool_call("ace_diagnose_error", {"error_code": 4}))
         print("[*] Testing ace_system_variable_info('BASE'):", handle_tool_call("ace_system_variable_info", {"var_name": "BASE"}))
     else:
-        print("SDLAce Web MCP & Debugging Tool Server running. Use --tools or --test.")
+        print("Jupiter ACE Web MCP & Debugging Tool Server running. Use --tools or --test.")
