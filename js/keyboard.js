@@ -388,9 +388,8 @@ export class AceKeyboard {
                 return;
             }
 
-            // Command-V / Ctrl-V: Paste Forth code without sending 'V' to Jupiter Ace
+            // Command-V / Ctrl-V: allow browser native paste event without sending 'V' to Jupiter Ace
             if ((e.metaKey || e.ctrlKey) && (e.key === 'v' || e.key === 'V' || e.code === 'KeyV')) {
-                if (e.preventDefault) e.preventDefault();
                 if (this.onPaste) {
                     this.onPaste();
                 }

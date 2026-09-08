@@ -183,22 +183,28 @@
         </div><!-- /.emulator-layout -->
     </main>
 
-    <!-- Forth Spooler / Paste Modal -->
-    <div id="spool-modal" class="modal-backdrop">
-        <div class="modal-card">
+    <!-- Multi-line Paste Warning Modal -->
+    <div id="paste-warning-modal" class="modal-backdrop">
+        <div class="modal-card" style="max-width: 520px;">
             <div class="modal-header">
-                <span style="font-weight: 700;">Spool / Paste Forth Code</span>
-                <button id="btn-close-spool-modal" class="btn btn-sm">✕</button>
+                <span style="font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 16px;">⚠️</span>
+                    <span>Paste Multi-Line Forth Code?</span>
+                </span>
+                <button id="btn-close-paste-warning" class="btn btn-sm">✕</button>
             </div>
             <div class="modal-body">
-                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
-                    Paste Forth code below. Comments <code>( ... )</code> outside colon definitions will be automatically stripped to prevent Ace ROM <code>ERROR 4</code>.
+                <p id="paste-warning-summary" style="font-size: 13px; margin: 0 0 10px 0; color: var(--text-main);">
+                    You are about to paste multiple lines into the Forth interpreter.
+                </p>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
+                    Code to be pasted (comments automatically stripped):
                 </div>
-                <textarea id="spool-textarea" rows="12" placeholder=": SQUARE DUP * . ;&#10;5 SQUARE" style="width: 100%; font-family: var(--font-mono); resize: vertical;"></textarea>
+                <pre id="paste-warning-preview" style="max-height: 200px; overflow-y: auto; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--accent-cyan); border: 1px solid var(--border-subtle); margin: 0; white-space: pre-wrap; word-break: break-all;"></pre>
             </div>
-            <div class="modal-footer">
-                <button id="btn-cancel-spool" class="btn">Cancel</button>
-                <button id="btn-start-spool" class="btn btn-primary">Spool into Jupiter ACE</button>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button id="btn-cancel-paste-warning" class="btn">Cancel (Esc)</button>
+                <button id="btn-confirm-paste-warning" class="btn btn-primary">Paste Code (Enter)</button>
             </div>
         </div>
     </div>
@@ -382,28 +388,116 @@
         const btnUploadSpool = document.getElementById('btn-upload-spool');
         const spoolFileInput = document.getElementById('spool-file-input');
 
-        // Paste Code handler: reads clipboard directly or falls back to modal
-        const handlePasteCode = async () => {
-            try {
-                if (navigator.clipboard && navigator.clipboard.readText) {
-                    const text = await navigator.clipboard.readText();
-                    if (text && text.trim().length > 0) {
-                        showToast(`Pasting ${text.length} chars into Forth...`);
-                        spoolStatus.textContent = `Pasting from clipboard...`;
-                        emu.spooler.spoolText(text, true);
-                        spoolTextarea.value = '';
-                        return;
-                    }
-                }
-            } catch (err) {
-                // Clipboard read permission prompt or blocked -> open modal
-            }
-            spoolTextarea.value = '';
-            spoolModal.classList.add('active');
-            spoolTextarea.focus();
+        // Multi-line Paste Warning Modal Elements
+        const pasteWarningModal = document.getElementById('paste-warning-modal');
+        const pasteWarningSummary = document.getElementById('paste-warning-summary');
+        const pasteWarningPreview = document.getElementById('paste-warning-preview');
+        const btnConfirmPasteWarning = document.getElementById('btn-confirm-paste-warning');
+        const btnCancelPasteWarning = document.getElementById('btn-cancel-paste-warning');
+        const btnClosePasteWarning = document.getElementById('btn-close-paste-warning');
+
+        let pendingMultiLineCode = null;
+
+        const dismissPasteWarning = () => {
+            pasteWarningModal.classList.remove('active');
+            pendingMultiLineCode = null;
         };
 
-        emu.keyboard.onPaste = handlePasteCode;
+        const confirmPasteCode = () => {
+            if (pendingMultiLineCode) {
+                const code = pendingMultiLineCode;
+                dismissPasteWarning();
+                showToast(`Pasting code into Forth...`);
+                spoolStatus.textContent = `Pasting from clipboard...`;
+                emu.spooler.spoolText(code, true);
+            }
+        };
+
+        // Unified paste processor: immediate single-line paste, warning dialog for multi-line
+        const handlePastedCode = (text) => {
+            if (!text || typeof text !== 'string') return;
+            const clean = emu.spooler.preprocessForth(text);
+            if (!clean || clean.trim().length === 0) return;
+
+            const lines = clean.trim().split('\n');
+            if (lines.length <= 1) {
+                // Single line: paste immediately with no interruption or modal
+                const preview = lines[0].length > 32 ? lines[0].substring(0, 32) + '...' : lines[0];
+                showToast(`Pasting: ${preview}`);
+                spoolStatus.textContent = `Pasting...`;
+                emu.spooler.spoolText(clean, true);
+            } else {
+                // Multi-line: show confirmation warning with line count & preview
+                pendingMultiLineCode = clean;
+                pasteWarningSummary.innerHTML = `You are about to paste <strong>${lines.length} lines</strong> (${clean.length} characters) into the Jupiter ACE.`;
+                pasteWarningPreview.textContent = clean;
+                pasteWarningModal.classList.add('active');
+                btnConfirmPasteWarning.focus();
+            }
+        };
+
+        btnConfirmPasteWarning.addEventListener('click', confirmPasteCode);
+        btnCancelPasteWarning.addEventListener('click', dismissPasteWarning);
+        btnClosePasteWarning.addEventListener('click', dismissPasteWarning);
+
+        pasteWarningModal.addEventListener('click', (e) => {
+            if (e.target === pasteWarningModal) {
+                dismissPasteWarning();
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (pasteWarningModal.classList.contains('active')) {
+                if (e.key === 'Escape') {
+                    dismissPasteWarning();
+                    e.stopPropagation();
+                } else if (e.key === 'Enter') {
+                    confirmPasteCode();
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        }, true);
+
+        // Native browser paste event (works synchronously and reliably across all browsers)
+        let lastPasteTimestamp = 0;
+        const onGlobalPaste = (e) => {
+            // Ignore paste events occurring inside inputs
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                return;
+            }
+            const now = Date.now();
+            if (now - lastPasteTimestamp < 150) return;
+            lastPasteTimestamp = now;
+
+            const text = (e.clipboardData || window.clipboardData)?.getData('text');
+            if (text) {
+                e.preventDefault();
+                handlePastedCode(text);
+            }
+        };
+
+        window.addEventListener('paste', onGlobalPaste);
+        canvas.addEventListener('paste', onGlobalPaste);
+
+        // Fallback for programmatic paste
+        emu.keyboard.onPaste = () => {
+            setTimeout(async () => {
+                if (Date.now() - lastPasteTimestamp > 150) {
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.readText) {
+                            const text = await navigator.clipboard.readText();
+                            if (text) {
+                                lastPasteTimestamp = Date.now();
+                                handlePastedCode(text);
+                            }
+                        }
+                    } catch (err) {
+                        // Clipboard permission denied
+                    }
+                }
+            }, 50);
+        };
 
         btnUploadSpool.addEventListener('click', () => {
             spoolFileInput.click();
@@ -414,45 +508,11 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = () => {
-                spoolStatus.textContent = `Spooling ${file.name}...`;
-                emu.spooler.spoolText(reader.result, true);
                 spoolFileInput.value = '';
+                handlePastedCode(reader.result);
             };
             reader.readAsText(file);
         });
-
-        document.getElementById('btn-close-spool-modal').addEventListener('click', () => {
-            spoolModal.classList.remove('active');
-            spoolTextarea.value = '';
-        });
-        document.getElementById('btn-cancel-spool').addEventListener('click', () => {
-            spoolModal.classList.remove('active');
-            spoolTextarea.value = '';
-        });
-
-        document.getElementById('btn-start-spool').addEventListener('click', () => {
-            const code = spoolTextarea.value;
-            if (code) {
-                emu.spooler.spoolText(code, true);
-                spoolModal.classList.remove('active');
-                spoolTextarea.value = '';
-            }
-        });
-
-        spoolModal.addEventListener('click', (e) => {
-            if (e.target === spoolModal) {
-                spoolModal.classList.remove('active');
-                spoolTextarea.value = '';
-            }
-        });
-
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && spoolModal.classList.contains('active')) {
-                spoolModal.classList.remove('active');
-                spoolTextarea.value = '';
-                e.stopPropagation();
-            }
-        }, true);
 
         btnStopSpool.addEventListener('click', () => {
             emu.spooler.stop();
