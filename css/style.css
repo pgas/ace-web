@@ -1,0 +1,536 @@
+/* ==========================================================================
+   SDLAce Web - Jupiter ACE Pure Browser Emulator
+   Modern Retro Aesthetics & Vintage Hardware Styling
+   ========================================================================== */
+
+:root {
+    --bg-main: #0c0f14;
+    --bg-card: rgba(22, 27, 34, 0.85);
+    --bg-card-border: rgba(255, 255, 255, 0.1);
+    
+    /* Authentic Jupiter Ace Case Colors */
+    --ace-case: #e8e3d5;
+    --ace-case-dark: #d5cfc0;
+    --ace-bezel: #242426;
+    --ace-stripe-red: #d32f2f;
+    --ace-stripe-dark: #b71c1c;
+    --ace-text: #212121;
+    
+    /* Modern UI Accents */
+    --accent-cyan: #38bdf8;
+    --accent-emerald: #34d399;
+    --accent-amber: #fbbf24;
+    --accent-rose: #f43f5e;
+    
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-main);
+    background-image: 
+        radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(244, 63, 94, 0.05) 0%, transparent 40%);
+    color: var(--text-main);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    overflow-x: hidden;
+}
+
+/* Header */
+header {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 0 8px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.brand-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--ace-stripe-red), var(--ace-stripe-dark));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 22px;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(211, 47, 47, 0.4);
+}
+
+.brand-title h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #fff;
+}
+
+.brand-title p {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* Button Styling */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid var(--bg-card-border);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    backdrop-filter: blur(8px);
+    user-select: none;
+}
+
+.btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    border-color: #38bdf8;
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0369a1, #075985);
+}
+
+.btn-danger {
+    background: rgba(244, 63, 94, 0.15);
+    border-color: rgba(244, 63, 94, 0.3);
+    color: #f87171;
+}
+
+.btn-danger:hover {
+    background: rgba(244, 63, 94, 0.25);
+}
+
+.btn-sm {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+/* Main Layout Grid */
+.main-container {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Authentic Jupiter ACE Case */
+.ace-case {
+    background: linear-gradient(to bottom, var(--ace-case), var(--ace-case-dark));
+    border-radius: 16px;
+    padding: 24px 28px 28px;
+    box-shadow: 
+        0 20px 40px -15px rgba(0, 0, 0, 0.7),
+        0 0 0 1px rgba(0, 0, 0, 0.4),
+        inset 0 2px 3px rgba(255, 255, 255, 0.8),
+        inset 0 -3px 5px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    border: 2px solid #b8b2a3;
+}
+
+/* Hardware Top Bar (Logo & Red Stripes) */
+.ace-case-top {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    padding: 0 4px;
+}
+
+.ace-hardware-logo {
+    height: 38px;
+    object-fit: contain;
+    filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.6));
+}
+
+.ace-stripes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 180px;
+}
+
+.ace-stripes .stripe {
+    height: 3px;
+    background: var(--ace-stripe-red);
+    border-radius: 1px;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Screen Housing & CRT Canvas */
+.screen-housing {
+    background: var(--ace-bezel);
+    padding: 18px;
+    border-radius: 10px;
+    box-shadow: 
+        inset 0 4px 10px rgba(0, 0, 0, 0.9),
+        0 1px 0 rgba(255, 255, 255, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.screen-housing::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+#ace-canvas {
+    display: block;
+    width: 512px;
+    height: 384px;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #ffffff;
+    border-radius: 4px;
+    cursor: text;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+}
+
+@media (min-width: 860px) {
+    #ace-canvas {
+        width: 640px;
+        height: 480px;
+    }
+}
+
+/* Bezel Status Bar */
+.bezel-status {
+    width: 100%;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #94a3b8;
+}
+
+.status-dot.active {
+    background: var(--accent-emerald);
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+}
+
+/* Control Panels & Decks */
+.controls-deck {
+    width: 100%;
+    max-width: 960px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.panel {
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent-cyan);
+}
+
+.panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.control-label {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+/* Inputs & Selects */
+select, input[type="text"], textarea {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--bg-card-border);
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+select:focus, input[type="text"]:focus, textarea:focus {
+    border-color: var(--accent-cyan);
+}
+
+/* Quick Action Keyboard Buttons */
+.quick-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.key-chip {
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.key-chip:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--accent-cyan);
+    color: #fff;
+}
+
+/* Forth Spooler Progress */
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald));
+    transition: width 0.1s linear;
+}
+
+/* Debugger HUD Drawer */
+.debugger-hud {
+    position: fixed;
+    right: 20px;
+    top: 20px;
+    width: 380px;
+    max-height: calc(100vh - 40px);
+    background: rgba(15, 23, 42, 0.95);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(16px);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    transform: translateX(420px);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.debugger-hud.open {
+    transform: translateX(0);
+}
+
+.debugger-header {
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debugger-body {
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.reg-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+
+.reg-cell {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.reg-name {
+    color: var(--accent-cyan);
+    font-size: 10px;
+    display: block;
+}
+
+.reg-val {
+    color: #fff;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.sysvar-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sysvar-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sysvar-table td:first-child {
+    color: var(--accent-amber);
+}
+
+/* Modal Dialogs */
+.modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.modal-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-card {
+    width: 90%;
+    max-width: 600px;
+    background: #131822;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transform: scale(0.95);
+    transition: transform 0.2s ease;
+}
+
+.modal-backdrop.active .modal-card {
+    transform: scale(1);
+}
+
+.modal-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-footer {
+    padding: 12px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}

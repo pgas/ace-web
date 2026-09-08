@@ -1,0 +1,19 @@
+{
+  "name": "jupiter-ace-web",
+  "version": "1.0.0",
+  "description": "Pure browser-based JavaScript emulator for the Jupiter ACE microcomputer",
+  "main": "js/main.js",
+  "scripts": {
+    "start": "python3 -m http.server 8085",
+    "test": "osascript -l JavaScript tests/test_emulator.js"
+  },
+  "keywords": [
+    "jupiter-ace",
+    "forth",
+    "z80",
+    "emulator",
+    "retro-computing"
+  ],
+  "author": "",
+  "license": "GPL-2.0-or-later"
+}

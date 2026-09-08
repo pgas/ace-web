@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDLAce Web - Jupiter ACE Pure Browser Emulator</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="images/ace_logo.png">
+</head>
+<body>
+
+    <!-- Header & Brand -->
+    <header>
+        <div class="brand">
+            <div class="brand-icon">J</div>
+            <div class="brand-title">
+                <h1>SDLAce Web</h1>
+                <p>Pure Browser-Based Jupiter ACE Forth Microcomputer</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button id="btn-toggle-debugger" class="btn" title="Toggle Z80 & Forth Debugger HUD">
+                🐞 Debugger HUD
+            </button>
+            <button id="btn-spool-modal" class="btn btn-primary" title="Paste or Spool Forth Code">
+                📜 Spool / Paste Forth
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+
+        <!-- Jupiter ACE Hardware Case -->
+        <div class="ace-case">
+            <!-- Hardware Top Bar -->
+            <div class="ace-case-top">
+                <img src="images/ace_logo.png" alt="Jupiter ACE" class="ace-hardware-logo">
+                <div class="ace-stripes">
+                    <div class="stripe"></div>
+                    <div class="stripe"></div>
+                    <div class="stripe"></div>
+                </div>
+            </div>
+
+            <!-- CRT Screen Housing -->
+            <div class="screen-housing">
+                <canvas id="ace-canvas" width="512" height="384"></canvas>
+            </div>
+
+            <!-- Hardware Status Strip -->
+            <div class="bezel-status">
+                <div class="status-indicator">
+                    <div id="status-dot" class="status-dot active"></div>
+                    <span id="status-run-text">Running (50 Hz)</span>
+                </div>
+                <div id="tape-status-text">TAPE: No tape attached</div>
+                <div id="ram-status-text">RAM: 19 KB (Extended)</div>
+            </div>
+        </div>
+
+        <!-- Quick Functional Keys Bar -->
+        <div class="quick-keys" style="margin-top: 4px;">
+            <button id="key-break" class="key-chip" title="Break execution (Escape / Shift+Space)">BREAK (Esc)</button>
+            <button id="key-del-line" class="key-chip" title="Delete current line (F1 / Shift+1)">DEL LINE (F1)</button>
+            <button id="key-inverse" class="key-chip" title="Toggle Inverse Video (F4 / Shift+4)">INVERSE (F4)</button>
+            <button id="key-graphics" class="key-chip" title="Toggle Graphics Mode (F9 / Shift+9)">GRAPHICS (F9)</button>
+            <button id="key-copy" class="key-chip" title="Copy Selected Screen Text">COPY TEXT</button>
+        </div>
+
+        <!-- Control Decks -->
+        <section class="controls-deck">
+
+            <!-- Playback & Audio Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">System & Sound</span>
+                    <span id="fps-counter" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-emerald);">50 FPS</span>
+                </div>
+                <div class="panel-body">
+                    <div class="control-row">
+                        <button id="btn-play-pause" class="btn btn-primary btn-sm">⏸ Pause</button>
+                        <button id="btn-reset" class="btn btn-danger btn-sm">↺ Reset</button>
+                        <button id="btn-turbo" class="btn btn-sm">⚡ Turbo: 100%</button>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Sound (1-bit Speaker)</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="range" id="sound-volume" min="0" max="100" value="25" style="width: 80px;">
+                            <button id="btn-sound-toggle" class="btn btn-sm">🔊 On</button>
+                        </div>
+                    </div>
+                    <div class="control-row">
+                        <span class="control-label">Memory Configuration</span>
+                        <select id="select-ram">
+                            <option value="3">3 KB (Base Unexpanded)</option>
+                            <option value="19" selected>19 KB (3KB + 16KB Expansion)</option>
+                            <option value="48">48 KB (Full Expansion)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tape Storage (.TAP) Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Cassette Tape (.TAP)</span>
+                </div>
+                <div class="panel-body">
+                    <div class="control-row">
+                        <input type="file" id="tape-file-input" accept=".tap" style="display: none;">
+                        <button id="btn-attach-tape" class="btn btn-sm">📂 Attach .TAP</button>
+                        <button id="btn-load-tuttut" class="btn btn-sm" title="Load bundled Tut-Tut game">🎮 Tut-Tut Demo</button>
+                        <button id="btn-run-tuttut" class="btn btn-sm" style="display: none;" title="Start Tut-Tut game">▶ Play Tut-Tut</button>
+                        <button id="btn-rewind-tape" class="btn btn-sm">⏮ Rewind</button>
+                        <button id="btn-download-tape" class="btn btn-sm" title="Download tape file">💾 Save</button>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+                        Tip: Drag & drop any <code>.tap</code> file onto the screen. Type <code>LOAD filename</code> or <code>BLOAD filename</code> in Ace Forth to load.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Source Spooler Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">Forth Source Spooler</span>
+                    <span id="spool-status" style="font-size: 11px; color: var(--accent-cyan);">Ready</span>
+                </div>
+                <div class="panel-body">
+                    <div class="control-row">
+                        <input type="file" id="spool-file-input" accept=".fth,.txt,.forth,.ace" style="display: none;">
+                        <button id="btn-upload-spool" class="btn btn-sm">📁 Upload Forth File</button>
+                        <button id="btn-spool-modal" class="btn btn-sm">📋 Paste Code</button>
+                        <button id="btn-stop-spool" class="btn btn-danger btn-sm" style="display: none;">⏹ Stop</button>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="spool-progress" class="progress-bar"></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- In-Browser Debugger HUD Drawer -->
+    <aside id="debugger-hud" class="debugger-hud">
+        <div class="debugger-header">
+            <span style="font-weight: 700; color: var(--accent-cyan);">Z80 & FORTH DEBUGGER</span>
+            <button id="btn-close-debugger" class="btn btn-sm">✕</button>
+        </div>
+        <div class="debugger-body">
+
+            <!-- Execution Step Controls -->
+            <div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">STEPPING</div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="dbg-step-inst" class="btn btn-sm">Step 1 Opcode</button>
+                    <button id="dbg-step-frame" class="btn btn-sm">Step 1 Frame (50Hz)</button>
+                </div>
+            </div>
+
+            <!-- Z80 Registers -->
+            <div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">CPU REGISTERS</div>
+                <div class="reg-grid">
+                    <div class="reg-cell"><span class="reg-name">PC</span><span id="reg-pc" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">SP</span><span id="reg-sp" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">AF</span><span id="reg-af" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">BC</span><span id="reg-bc" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">DE</span><span id="reg-de" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">HL</span><span id="reg-hl" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">IX</span><span id="reg-ix" class="reg-val">0000</span></div>
+                    <div class="reg-cell"><span class="reg-name">IY</span><span id="reg-iy" class="reg-val">0000</span></div>
+                </div>
+                <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                    Flags: <span id="reg-flags" style="color: #fff; font-weight: bold;">--------</span>
+                </div>
+            </div>
+
+            <!-- Forth System Variables -->
+            <div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">FORTH SYSTEM VARIABLES</div>
+                <table class="sysvar-table">
+                    <tr><td>BASE (15423)</td><td id="sys-base">10</td></tr>
+                    <tr><td>FRAMES (15403)</td><td id="sys-frames">0</td></tr>
+                    <tr><td>STKBOT (15415)</td><td id="sys-stkbot">0x3C40</td></tr>
+                    <tr><td>DICT (15417)</td><td id="sys-dict">0x3C40</td></tr>
+                    <tr><td>ERR_NO (15421)</td><td id="sys-err">255 (OK)</td></tr>
+                </table>
+            </div>
+
+            <!-- Memory Hex Viewer -->
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <span style="font-size: 11px; color: var(--text-muted);">HEX MEMORY DUMP</span>
+                    <input type="text" id="hex-address-input" value="0x3C00" style="width: 80px; font-size: 11px; text-align: center;">
+                </div>
+                <div id="hex-dump-content" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 10px; line-height: 1.4; max-height: 140px; overflow-y: auto;"></div>
+            </div>
+
+            <!-- Forth Dictionary Tree -->
+            <div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">DICTIONARY LINKAGE</div>
+                <div id="dict-words-list" style="background: rgba(0,0,0,0.4); padding: 8px; border-radius: 4px; font-size: 11px; max-height: 120px; overflow-y: auto;"></div>
+            </div>
+
+        </div>
+    </aside>
+
+    <!-- Forth Spooler / Paste Modal -->
+    <div id="spool-modal" class="modal-backdrop">
+        <div class="modal-card">
+            <div class="modal-header">
+                <span style="font-weight: 700;">Spool / Paste Forth Code</span>
+                <button id="btn-close-spool-modal" class="btn btn-sm">✕</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+                    Paste Forth code below. Comments <code>( ... )</code> outside colon definitions will be automatically stripped to prevent Ace ROM <code>ERROR 4</code>.
+                </div>
+                <textarea id="spool-textarea" rows="12" placeholder=": SQUARE DUP * . ;&#10;5 SQUARE" style="width: 100%; font-family: var(--font-mono); resize: vertical;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-spool" class="btn">Cancel</button>
+                <button id="btn-start-spool" class="btn btn-primary">Spool into Jupiter ACE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script type="module">
+        import { JupiterAceEmulator } from './js/main.js';
+
+        const canvas = document.getElementById('ace-canvas');
+        const emu = new JupiterAceEmulator(canvas);
+
+        // Auto start on first user interaction or immediate
+        emu.resume();
+
+        // UI Controls Wiring
+        const btnPlayPause = document.getElementById('btn-play-pause');
+        const statusRunText = document.getElementById('status-run-text');
+        const statusDot = document.getElementById('status-dot');
+
+        btnPlayPause.addEventListener('click', () => {
+            if (emu.running) {
+                emu.pause();
+                btnPlayPause.textContent = '▶ Resume';
+                statusRunText.textContent = 'Paused';
+                statusDot.classList.remove('active');
+            } else {
+                emu.resume();
+                btnPlayPause.textContent = '⏸ Pause';
+                statusRunText.textContent = 'Running (50 Hz)';
+                statusDot.classList.add('active');
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            emu.reset();
+        });
+
+        const btnTurbo = document.getElementById('btn-turbo');
+        btnTurbo.addEventListener('click', () => {
+            if (emu.speedMultiplier === 1) {
+                emu.speedMultiplier = 4;
+                btnTurbo.textContent = '⚡ Turbo: 400%';
+            } else {
+                emu.speedMultiplier = 1;
+                btnTurbo.textContent = '⚡ Turbo: 100%';
+            }
+            btnTurbo.blur();
+        });
+
+        // Sound Controls
+        const soundToggle = document.getElementById('btn-sound-toggle');
+        soundToggle.addEventListener('click', () => {
+            emu.audio.enabled = !emu.audio.enabled;
+            soundToggle.textContent = emu.audio.enabled ? '🔊 On' : '🔇 Muted';
+        });
+
+        document.getElementById('sound-volume').addEventListener('input', (e) => {
+            emu.audio.volume = e.target.value / 100;
+        });
+
+        // Memory size
+        const selectRam = document.getElementById('select-ram');
+        const ramStatusText = document.getElementById('ram-status-text');
+        selectRam.addEventListener('change', (e) => {
+            const kb = parseInt(e.target.value, 10);
+            emu.memory.setRamSize(kb);
+            ramStatusText.textContent = `RAM: ${kb} KB (${kb > 3 ? 'Extended' : 'Unexpanded'})`;
+            selectRam.blur();
+        });
+
+        // Tape Subsystem UI
+        const btnAttachTape = document.getElementById('btn-attach-tape');
+        const tapeFileInput = document.getElementById('tape-file-input');
+        const tapeStatusText = document.getElementById('tape-status-text');
+        const btnLoadTuttut = document.getElementById('btn-load-tuttut');
+        const btnRunTuttut = document.getElementById('btn-run-tuttut');
+
+        emu.tape.onStatusChange = (status) => {
+            tapeStatusText.textContent = `TAPE: ${status.message}`;
+            console.log('[Tape]', status.message);
+        };
+
+        btnAttachTape.addEventListener('click', () => tapeFileInput.click());
+        tapeFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                emu.tape.attach(file.name, reader.result);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btn-rewind-tape').addEventListener('click', () => {
+            emu.tape.rewind();
+        });
+
+        document.getElementById('btn-download-tape').addEventListener('click', () => {
+            const blob = emu.tape.exportBlob();
+            if (!blob) {
+                alert('No tape data to download.');
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = emu.tape.filename || 'ace_export.tap';
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        btnLoadTuttut.addEventListener('click', async () => {
+            try {
+                // Ensure extended 19KB RAM is enabled (Tut-Tut requires > 3KB)
+                emu.memory.setRamSize(19);
+                selectRam.value = '19';
+                ramStatusText.textContent = 'RAM: 19 KB (Extended)';
+
+                // Fetch and attach tut-tut.tap
+                const res = await fetch('examples/tut-tut.tap');
+                const buf = await res.arrayBuffer();
+                emu.tape.attach('tut-tut.tap', buf);
+                emu.tape.rewind();
+
+                // Spool the load command and launch Tut-Tut automatically
+                emu.spooler.spoolText('LOAD TUTTUT\nTUTTUT\n', false);
+                btnRunTuttut.style.display = 'inline-flex';
+            } catch (err) {
+                alert('Could not fetch tut-tut.tap: ' + err.message);
+            }
+        });
+
+        btnRunTuttut.addEventListener('click', () => {
+            emu.spooler.spoolText('TUTTUT\n', false);
+        });
+
+        // Drag and drop tape & source file support
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                if (file.name.endsWith('.tap')) {
+                    const reader = new FileReader();
+                    reader.onload = () => emu.tape.attach(file.name, reader.result);
+                    reader.readAsArrayBuffer(file);
+                } else if (file.name.endsWith('.fth') || file.name.endsWith('.txt') || file.name.endsWith('.forth')) {
+                    const reader = new FileReader();
+                    reader.onload = () => emu.spooler.spoolText(reader.result, true);
+                    reader.readAsText(file);
+                }
+            }
+        });
+
+        // Quick Function Keys
+        const triggerKey = (ch) => {
+            emu.keyboard.pressCharacter(ch);
+            setTimeout(() => emu.keyboard.releaseCharacter(ch), 100);
+        };
+
+        document.getElementById('key-break').addEventListener('click', () => triggerKey('Escape'));
+        document.getElementById('key-del-line').addEventListener('click', () => triggerKey('F1'));
+        document.getElementById('key-inverse').addEventListener('click', () => triggerKey('F4'));
+        document.getElementById('key-graphics').addEventListener('click', () => triggerKey('F9'));
+
+        document.getElementById('key-copy').addEventListener('click', () => {
+            const txt = emu.video.getSelectedText(emu.memory.getVideoRam()) || window.__ace.getScreenText();
+            navigator.clipboard.writeText(txt).then(() => alert('Copied screen text to clipboard!'));
+        });
+
+        // Forth Source Spooler UI
+        const spoolModal = document.getElementById('spool-modal');
+        const spoolTextarea = document.getElementById('spool-textarea');
+        const spoolProgress = document.getElementById('spool-progress');
+        const spoolStatus = document.getElementById('spool-status');
+        const btnStopSpool = document.getElementById('btn-stop-spool');
+        const btnUploadSpool = document.getElementById('btn-upload-spool');
+        const spoolFileInput = document.getElementById('spool-file-input');
+
+        btnUploadSpool.addEventListener('click', () => {
+            spoolFileInput.click();
+        });
+
+        spoolFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                spoolStatus.textContent = `Spooling ${file.name}...`;
+                emu.spooler.spoolText(reader.result, true);
+                spoolFileInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('btn-spool-modal').addEventListener('click', () => {
+            spoolModal.classList.add('active');
+        });
+        document.getElementById('btn-close-spool-modal').addEventListener('click', () => {
+            spoolModal.classList.remove('active');
+        });
+        document.getElementById('btn-cancel-spool').addEventListener('click', () => {
+            spoolModal.classList.remove('active');
+        });
+
+        document.getElementById('btn-start-spool').addEventListener('click', () => {
+            const code = spoolTextarea.value;
+            if (code) {
+                emu.spooler.spoolText(code, true);
+                spoolModal.classList.remove('active');
+            }
+        });
+
+        btnStopSpool.addEventListener('click', () => {
+            emu.spooler.stop();
+        });
+
+        emu.spooler.onProgress = (done, total) => {
+            const pct = Math.round((done / total) * 100);
+            spoolProgress.style.width = pct + '%';
+            if (pct < 100) {
+                spoolStatus.textContent = `Spooling: ${pct}%`;
+                btnStopSpool.style.display = 'inline-flex';
+            } else {
+                spoolStatus.textContent = 'Finished';
+                btnStopSpool.style.display = 'none';
+                setTimeout(() => {
+                    spoolStatus.textContent = 'Ready';
+                    spoolProgress.style.width = '0%';
+                }, 2000);
+            }
+        };
+
+        // Blur buttons automatically after click so Space / Enter does not re-trigger them
+        document.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => btn.blur());
+        });
+
+        // Debugger HUD Wiring
+        const debuggerHud = document.getElementById('debugger-hud');
+        document.getElementById('btn-toggle-debugger').addEventListener('click', () => {
+            debuggerHud.classList.toggle('open');
+        });
+        document.getElementById('btn-close-debugger').addEventListener('click', () => {
+            debuggerHud.classList.remove('open');
+        });
+
+        document.getElementById('dbg-step-inst').addEventListener('click', () => {
+            emu.pause();
+            emu.stepInstruction();
+            updateDebuggerHud();
+        });
+
+        document.getElementById('dbg-step-frame').addEventListener('click', () => {
+            emu.pause();
+            emu.runFrame();
+            updateDebuggerHud();
+        });
+
+        const hexAddrInput = document.getElementById('hex-address-input');
+        hexAddrInput.addEventListener('change', () => updateDebuggerHud());
+
+        function updateDebuggerHud() {
+            if (!debuggerHud.classList.contains('open')) return;
+
+            const regs = emu.debugger.getRegisters();
+            if (regs) {
+                document.getElementById('reg-pc').textContent = regs.PC;
+                document.getElementById('reg-sp').textContent = regs.SP;
+                document.getElementById('reg-af').textContent = regs.AF;
+                document.getElementById('reg-bc').textContent = regs.BC;
+                document.getElementById('reg-de').textContent = regs.DE;
+                document.getElementById('reg-hl').textContent = regs.HL;
+                document.getElementById('reg-ix').textContent = regs.IX;
+                document.getElementById('reg-iy').textContent = regs.IY;
+                document.getElementById('reg-flags').textContent = regs.Flags;
+            }
+
+            const sys = emu.debugger.getSysVars();
+            document.getElementById('sys-base').textContent = sys.BASE;
+            document.getElementById('sys-frames').textContent = sys.FRAMES;
+            document.getElementById('sys-stkbot').textContent = '0x' + sys.STKBOT.toString(16).toUpperCase();
+            document.getElementById('sys-dict').textContent = '0x' + sys.DICT.toString(16).toUpperCase();
+            document.getElementById('sys-err').textContent = `${sys.ERR_NO} (${sys.ERR_DESC})`;
+
+            // Hex dump
+            let addr = parseInt(hexAddrInput.value, 16);
+            if (isNaN(addr)) addr = 0x3C00;
+            const dump = emu.debugger.getMemoryDump(addr, 64);
+            const dumpHtml = dump.map(r => `<div><span style="color: var(--accent-cyan);">${r.addr}:</span> ${r.bytes} <span style="color: var(--text-muted);">|${r.ascii}|</span></div>`).join('');
+            document.getElementById('hex-dump-content').innerHTML = dumpHtml;
+
+            // Dictionary list
+            const words = emu.debugger.inspectDictionary(15);
+            if (words.length > 0) {
+                document.getElementById('dict-words-list').innerHTML = words.map(w => `<div><span style="color: var(--accent-amber); font-weight: bold;">${w.name}</span> <span style="color: var(--text-muted); font-size: 10px;">(${w.addr})</span></div>`).join('');
+            } else {
+                document.getElementById('dict-words-list').textContent = 'No user words defined yet.';
+            }
+        }
+
+        // Periodic debugger HUD refresh (every 250ms if open)
+        setInterval(updateDebuggerHud, 250);
+    </script>
+</body>
+</html>
